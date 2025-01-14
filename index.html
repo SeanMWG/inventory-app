@@ -7,6 +7,10 @@
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
+    <button id="themeToggle" class="theme-toggle">
+        <span class="icon">🌞</span>
+        <span class="text">Light Mode</span>
+    </button>
     <div class="container">
         <h1>IT Hardware Inventory</h1>
 
@@ -221,7 +225,9 @@
             // Update sort indicators
             document.querySelectorAll('th.sortable').forEach(th => {
                 const sortColumn = th.getAttribute('data-sort');
-                th.textContent = th.textContent.replace(/[↑↓]$/, '');
+                // Remove all sort indicators first
+                th.textContent = th.textContent.replace(/[↑↓↕]$/, '').trim();
+                // Add the appropriate indicator
                 if (sortColumn === column) {
                     th.textContent += currentSort.direction === 'asc' ? ' ↑' : ' ↓';
                 } else {
@@ -250,6 +256,27 @@
                 sortTable(th.getAttribute('data-sort'));
             });
             th.style.cursor = 'pointer';
+        });
+
+        // Theme toggle functionality
+        const themeToggle = document.getElementById('themeToggle');
+        const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+        
+        // Set initial theme based on system preference
+        if (prefersDarkScheme.matches) {
+            document.body.setAttribute('data-theme', 'dark');
+            themeToggle.innerHTML = '<span class="icon">🌜</span><span class="text">Dark Mode</span>';
+        }
+
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = document.body.getAttribute('data-theme');
+            if (currentTheme === 'dark') {
+                document.body.removeAttribute('data-theme');
+                themeToggle.innerHTML = '<span class="icon">🌞</span><span class="text">Light Mode</span>';
+            } else {
+                document.body.setAttribute('data-theme', 'dark');
+                themeToggle.innerHTML = '<span class="icon">🌜</span><span class="text">Dark Mode</span>';
+            }
         });
 
         // Load inventory on page load
