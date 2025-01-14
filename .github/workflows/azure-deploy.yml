@@ -3,7 +3,8 @@ name: Deploy to Azure Web App
 on:
   push:
     branches:
-      - main  # or master, depending on your default branch
+      - main
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -22,7 +23,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Build and deploy
+    - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
       with:
         app-name: 'inventory-app-sean'
