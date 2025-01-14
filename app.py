@@ -1,43 +1,51 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, redirect, session, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime
 import os
+import msal
+import requests
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+app.config.from_object('config')
+app.secret_key = os.urandom(24)  # Required for session management
+CORS(app)
 
-# Configure logging
-import logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-
-# Error handler for API routes
-@app.errorhandler(Exception)
-def handle_error(error):
-    logger.error(f"An error occurred: {str(error)}")
-    return jsonify({"error": str(error)}), 500
-
-# Get database connection string from environment variable and format it for SQLAlchemy
-try:
-    db_connection = os.getenv('DATABASE_URL', 'sqlite:///inventory.db')
-    logger.info(f"Database type: {'SQL Server' if 'ODBC Driver' in db_connection else 'SQLite'}")
-    
-    if 'ODBC Driver' in db_connection:
-        # Parse the ODBC connection string
-        params = dict(param.split('=') for param in db_connection.split(';') if '=' in param)
-        # Format it as a SQLAlchemy URL
-        sql_server_url = f"mssql+pyodbc:///?odbc_connect={db_connection}"
-        app.config['SQLALCHEMY_DATABASE_URI'] = sql_server_url
-        logger.info("Successfully configured SQL Server connection")
-    else:
-        app.config['SQLALCHEMY_DATABASE_URI'] = db_connection
-        logger.info("Using SQLite database")
-except Exception as e:
-    logger.error(f"Error configuring database: {str(e)}")
-    raise
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Initialize SQLAlchemy
 db = SQLAlchemy(app)
+
+# Initialize MSAL
+def _build_msal_app():
+    return msal.ConfidentialClientApplication(
+        app.config['CLIENT_ID'],
+        authority=app.config['AUTHORITY'],
+        client_credential=None  # No client secret needed for public client application
+    )
+
+def _build_auth_url():
+    return _build_msal_app().get_authorization_request_url(
+        app.config['SCOPE'],
+        redirect_uri=app.config['REDIRECT_URI'],
+        state=None
+    )
+
+def _get_token_from_cache(token_cache):
+    accounts = token_cache.get_accounts()
+    if accounts:
+        return _build_msal_app().acquire_token_silent(
+            app.config['SCOPE'],
+            account=accounts[0]
+        )
+    return None
+
+# Authentication decorator
+def login_required(f):
+    def decorated_function(*args, **kwargs):
+        if not session.get('user'):
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    decorated_function.__name__ = f.__name__
+    return decorated_function
 
 # Hardware Model
 class Hardware(db.Model):
@@ -55,8 +63,39 @@ class Hardware(db.Model):
 with app.app_context():
     db.create_all()
 
-# Routes
+# Auth routes
+@app.route('/login')
+def login():
+    if session.get('user'):
+        return redirect(url_for('serve_index'))
+    auth_url = _build_auth_url()
+    return redirect(auth_url)
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('serve_index'))
+
+@app.route(app.config['REDIRECT_PATH'])
+def authorized():
+    if request.args.get('error'):
+        return request.args['error']
+    
+    cache = _build_msal_app().get_token_by_authorization_code(
+        request.args['code'],
+        scopes=app.config['SCOPE'],
+        redirect_uri=app.config['REDIRECT_URI']
+    )
+    
+    if 'error' in cache:
+        return cache['error']
+    
+    session['user'] = cache.get('id_token_claims')
+    return redirect(url_for('serve_index'))
+
+# Protected routes
 @app.route('/api/hardware', methods=['GET'])
+@login_required
 def get_hardware():
     hardware_items = Hardware.query.all()
     return jsonify([{
@@ -72,10 +111,10 @@ def get_hardware():
     } for item in hardware_items])
 
 @app.route('/api/hardware', methods=['POST'])
+@login_required
 def add_hardware():
     data = request.json
     
-    # Convert date strings to datetime objects if they exist
     date_assigned = datetime.fromisoformat(data['date_assigned']) if data.get('date_assigned') else None
     date_decommissioned = datetime.fromisoformat(data['date_decommissioned']) if data.get('date_decommissioned') else None
     
@@ -108,8 +147,4 @@ def serve_static(path):
     return send_from_directory('.', path)
 
 if __name__ == '__main__':
-    try:
-        port = int(os.getenv('PORT', 8000))
-        app.run(host='0.0.0.0', port=port)
-    except Exception as e:
-        print(f"Error starting app: {e}")
+    app.run(debug=True)

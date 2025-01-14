@@ -7,10 +7,14 @@
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    <button id="themeToggle" class="theme-toggle">
-        <span class="icon">🌞</span>
-        <span class="text">Light Mode</span>
-    </button>
+    <div class="top-buttons">
+        <button id="themeToggle" class="theme-toggle">
+            <span class="icon">🌞</span>
+            <span class="text">Light Mode</span>
+        </button>
+        <button id="loginBtn" class="auth-button" onclick="window.location.href='/login'">Sign In</button>
+        <button id="logoutBtn" class="auth-button" onclick="window.location.href='/logout'" style="display: none;">Sign Out</button>
+    </div>
     <div class="container">
         <h1>IT Hardware Inventory</h1>
 
@@ -279,8 +283,36 @@
             }
         });
 
+        // Check authentication status
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/hardware');
+                if (response.redirected) {
+                    // If redirected to login page
+                    document.getElementById('loginBtn').style.display = 'block';
+                    document.getElementById('logoutBtn').style.display = 'none';
+                    return false;
+                } else if (response.ok) {
+                    // If authenticated
+                    document.getElementById('loginBtn').style.display = 'none';
+                    document.getElementById('logoutBtn').style.display = 'block';
+                    return true;
+                }
+            } catch (error) {
+                console.error('Error checking auth:', error);
+                return false;
+            }
+        }
+
         // Load inventory on page load
-        loadInventory();
+        async function init() {
+            const isAuthenticated = await checkAuth();
+            if (isAuthenticated) {
+                loadInventory();
+            }
+        }
+
+        init();
     </script>
 </body>
 </html>
