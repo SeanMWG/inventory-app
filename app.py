@@ -11,6 +11,17 @@ app.config.from_object('config')
 app.secret_key = os.urandom(24)  # Required for session management
 CORS(app)
 
+# Configure database
+db_connection = os.getenv('DATABASE_URL', 'sqlite:///inventory.db')
+if 'ODBC Driver' in db_connection:
+    # Parse the ODBC connection string
+    params = dict(param.split('=') for param in db_connection.split(';') if '=' in param)
+    # Format it as a SQLAlchemy URL
+    sql_server_url = f"mssql+pyodbc:///?odbc_connect={db_connection}"
+    app.config['SQLALCHEMY_DATABASE_URI'] = sql_server_url
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_connection
+
 # Initialize SQLAlchemy
 db = SQLAlchemy(app)
 
