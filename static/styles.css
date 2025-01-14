@@ -215,16 +215,6 @@ th.sortable:hover {
     cursor: pointer;
 }
 
-th.sortable::after {
-    content: '↕';
-    position: absolute;
-    right: 8px;
-    color: #666;
-}
-
-th.sortable:hover::after {
-    color: #007bff;
-}
 
 tr:hover {
     background-color: var(--hover-bg);
