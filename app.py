@@ -3,31 +3,49 @@ import pandas as pd
 from werkzeug.utils import secure_filename
 import tempfile
 import os
-from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime
-import os
 import msal
 import requests
+import logging
+import sys
+import pyodbc
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 
 app = Flask(__name__)
 app.config.from_object('config')
 app.secret_key = os.urandom(24)  # Required for session management
 CORS(app)
 
-# Configure database
-db_connection = os.getenv('DATABASE_URL', 'sqlite:///inventory.db')
-if 'ODBC Driver' in db_connection:
-    # Parse the ODBC connection string
-    params = dict(param.split('=') for param in db_connection.split(';') if '=' in param)
-    # Format it as a SQLAlchemy URL
-    sql_server_url = f"mssql+pyodbc:///?odbc_connect={db_connection}"
-    app.config['SQLALCHEMY_DATABASE_URI'] = sql_server_url
-else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = db_connection
+# Get database connection string
+db_connection = os.getenv('DATABASE_URL', '')
+logging.info(f"Original connection string: {db_connection}")
 
-# Initialize SQLAlchemy
-db = SQLAlchemy(app)
+if 'ODBC Driver' in db_connection:
+    try:
+        # Test connection immediately
+        test_conn = pyodbc.connect(db_connection)
+        test_conn.close()
+        logging.info("Database connection test successful")
+    except Exception as e:
+        logging.error(f"Error testing database connection: {str(e)}")
+        # Try a simpler connection string
+        params = dict(param.split('=') for param in db_connection.split(';') if '=' in param)
+        db_connection = (
+            f"DRIVER={{SQL Server}};"
+            f"SERVER={params.get('Server')};"
+            f"DATABASE={params.get('Database')};"
+            "Trusted_Connection=yes;"
+        )
+        logging.info(f"Using fallback connection string: {db_connection}")
 
 # Initialize MSAL
 def _build_msal_app():
@@ -62,24 +80,14 @@ def login_required(f):
     decorated_function.__name__ = f.__name__
     return decorated_function
 
-# Hardware Model
-class Hardware(db.Model):
-    __tablename__ = 'Formatted_Company_Inventory'
-    __table_args__ = {'schema': 'dbo'}
-    
-    # Using serial_number as primary key since it's unique
-    serial_number = db.Column(db.String(100), primary_key=True)
-    manufacturer = db.Column(db.String(100))
-    model_number = db.Column(db.String(100))
-    hardware_type = db.Column(db.String(100))
-    assigned_to = db.Column(db.String(100))
-    room_name = db.Column(db.String(100))
-    date_assigned = db.Column(db.String(100))
-    date_decommissioned = db.Column(db.String(100))
-
-# Create tables
-with app.app_context():
-    db.create_all()
+# Function to get database connection
+def get_db_connection():
+    try:
+        conn = pyodbc.connect(db_connection)
+        return conn
+    except Exception as e:
+        logging.error(f"Error connecting to database: {str(e)}")
+        raise
 
 # Auth routes
 @app.route('/login')
@@ -117,31 +125,60 @@ def authorized():
 def get_hardware():
     try:
         page = request.args.get('page', 1, type=int)
-        per_page = 25
+        per_page = 35
         
         logging.info(f"Fetching hardware items from database (page {page})")
-        query = Hardware.query
-        logging.info(f"SQL Query: {str(query)}")
-        
-        # Get total count for pagination
-        total_items = query.count()
-        total_pages = (total_items + per_page - 1) // per_page
-        
-        # Get paginated items
-        hardware_items = query.offset((page - 1) * per_page).limit(per_page).all()
+        # Connect to database and execute queries
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get total count
+            count_sql = "SELECT COUNT(*) FROM dbo.Formatted_Company_Inventory"
+            cursor.execute(count_sql)
+            total_items = cursor.fetchval()
+            logging.info(f"Total items: {total_items}")
+            
+            # Calculate pagination
+            total_pages = (total_items + per_page - 1) // per_page
+            
+            # Get items for current page
+            offset = (page - 1) * per_page
+            query = """
+            SELECT TOP (?) [manufacturer], [model_number], [hardware_type], [serial_number],
+                   [assigned_to], [room_name], [date_assigned], [date_decommissioned]
+            FROM [dbo].[Formatted_Company_Inventory]
+            WHERE [serial_number] > (
+                SELECT ISNULL(MAX([serial_number]), '')
+                FROM (
+                    SELECT TOP (?) [serial_number]
+                    FROM [dbo].[Formatted_Company_Inventory]
+                    ORDER BY [serial_number]
+                ) AS t
+            )
+            ORDER BY [serial_number];
+            """
+            logging.info(f"Executing query for page {page} (offset {offset})...")
+            cursor.execute(query, (per_page, offset))
+            
+            # Get column names and fetch rows
+            columns = [column[0] for column in cursor.description]
+            rows = cursor.fetchall()
+            logging.info(f"Retrieved {len(rows)} rows")
+            
+            # Convert to list of dictionaries
+            hardware_items = []
+            for row in rows:
+                item = {}
+                for i, value in enumerate(row):
+                    item[columns[i].lower()] = value
+                hardware_items.append(item)
+            
+            if hardware_items:
+                logging.info(f"Sample item: {hardware_items[0]}")
         logging.info(f"Found {len(hardware_items)} items on page {page}")
         
         result = {
-            'items': [{
-        'manufacturer': item.manufacturer,
-        'model_number': item.model_number,
-        'hardware_type': item.hardware_type,
-        'serial_number': item.serial_number,
-        'assigned_to': item.assigned_to,
-        'room_name': item.room_name,
-        'date_assigned': item.date_assigned,
-        'date_decommissioned': item.date_decommissioned
-            } for item in hardware_items],
+            'items': hardware_items,
             'total_pages': total_pages,
             'current_page': page,
             'total_items': total_items
@@ -156,26 +193,37 @@ def get_hardware():
 @app.route('/api/hardware', methods=['POST'])
 # @login_required  # Temporarily disabled
 def add_hardware():
-    data = request.json
-    
-    new_hardware = Hardware(
-        manufacturer=data['manufacturer'],
-        model_number=data['model_number'],
-        hardware_type=data['hardware_type'],
-        serial_number=data['serial_number'],
-        assigned_to=data.get('assigned_to'),
-        room_name=data.get('room_name'),
-        date_assigned=data.get('date_assigned'),
-        date_decommissioned=data.get('date_decommissioned')
-    )
-    
-    db.session.add(new_hardware)
-    
     try:
-        db.session.commit()
-        return jsonify({'message': 'Hardware added successfully'}), 201
+        data = request.json
+        
+        # Connect to database
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Insert new record
+            query = """
+            INSERT INTO dbo.Formatted_Company_Inventory 
+            (manufacturer, model_number, hardware_type, serial_number, 
+             assigned_to, room_name, date_assigned, date_decommissioned)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            """
+            
+            cursor.execute(query, (
+                data['manufacturer'],
+                data['model_number'],
+                data['hardware_type'],
+                data['serial_number'],
+                data.get('assigned_to'),
+                data.get('room_name'),
+                data.get('date_assigned'),
+                data.get('date_decommissioned')
+            ))
+            
+            conn.commit()
+            return jsonify({'message': 'Hardware added successfully'}), 201
+            
     except Exception as e:
-        db.session.rollback()
+        logging.error(f"Error adding hardware: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 400
 
 @app.route('/')
@@ -187,17 +235,6 @@ def serve_static(path):
     return send_from_directory('.', path)
 
 # Excel import route
-import logging
-import sys
-
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
 
 @app.route('/api/import', methods=['POST'])
 # @login_required  # Temporarily disabled
@@ -247,34 +284,57 @@ def import_excel():
                 logging.error(error_msg)
                 return jsonify({'error': error_msg}), 400
             
-            # Import records
-            success_count = 0
-            error_count = 0
-            errors = []
-            
-            for index, row in df.iterrows():
-                try:
-                    # Create hardware object
-                    hardware = Hardware(
-                        manufacturer=row['manufacturer'],
-                        model_number=row['model_number'],
-                        hardware_type=row['hardware_type'],
-                        serial_number=row['serial_number'],
-                        assigned_to=row.get('assigned_to'),
-                        room_name=row.get('room_name'),
-                        date_assigned=pd.to_datetime(row.get('date_assigned')).to_pydatetime() if pd.notna(row.get('date_assigned')) else None,
-                        date_decommissioned=pd.to_datetime(row.get('date_decommissioned')).to_pydatetime() if pd.notna(row.get('date_decommissioned')) else None
-                    )
-                    db.session.add(hardware)
-                    db.session.commit()
-                    success_count += 1
-                except Exception as e:
-                    error_msg = f"Row {index + 2}: {str(e)}"
-                    logging.error(f"Error processing row: {error_msg}")
-                    logging.error(f"Row data: {row.to_dict()}")
-                    error_count += 1
-                    errors.append(error_msg)
-                    db.session.rollback()
+            # Connect to database
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                success_count = 0
+                error_count = 0
+                errors = []
+                
+                # Import records
+                for index, row in df.iterrows():
+                    try:
+                        # Insert new record
+                        query = """
+                        INSERT INTO dbo.Formatted_Company_Inventory 
+                        (manufacturer, model_number, hardware_type, serial_number, 
+                         assigned_to, room_name, date_assigned, date_decommissioned)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                        """
+                        
+                        # Convert dates to string format if they exist
+                        date_assigned = row.get('date_assigned')
+                        date_decommissioned = row.get('date_decommissioned')
+                        
+                        if pd.notna(date_assigned):
+                            date_assigned = pd.to_datetime(date_assigned).strftime('%Y-%m-%d')
+                        else:
+                            date_assigned = None
+                            
+                        if pd.notna(date_decommissioned):
+                            date_decommissioned = pd.to_datetime(date_decommissioned).strftime('%Y-%m-%d')
+                        else:
+                            date_decommissioned = None
+                        
+                        cursor.execute(query, (
+                            row['manufacturer'],
+                            row['model_number'],
+                            row['hardware_type'],
+                            row['serial_number'],
+                            row.get('assigned_to'),
+                            row.get('room_name'),
+                            date_assigned,
+                            date_decommissioned
+                        ))
+                        conn.commit()
+                        success_count += 1
+                        
+                    except Exception as e:
+                        error_msg = f"Row {index + 2}: {str(e)}"
+                        logging.error(f"Error processing row: {error_msg}")
+                        logging.error(f"Row data: {row.to_dict()}")
+                        error_count += 1
+                        errors.append(error_msg)
             
             # Clean up temp file
             os.unlink(tmp.name)
