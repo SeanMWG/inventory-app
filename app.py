@@ -190,8 +190,14 @@ def get_hardware():
         logging.error(f"Error fetching hardware: {str(e)}", exc_info=True)
         return jsonify({'error': f'Error fetching hardware: {str(e)}'}), 500
 
-@app.route('/api/hardware', methods=['POST'])
+@app.route('/api/hardware', methods=['POST', 'PUT'])
 # @login_required  # Temporarily disabled
+def handle_hardware():
+    if request.method == 'POST':
+        return add_hardware()
+    else:
+        return update_hardware()
+
 def add_hardware():
     try:
         data = request.json
@@ -349,6 +355,54 @@ def import_excel():
         logging.error(f"Unexpected error: {error_msg}")
         logging.error(f"Exception details:", exc_info=True)
         return jsonify({'error': error_msg}), 500
+
+def update_hardware():
+    try:
+        data = request.json
+        hardware_id = data.pop('id', None)  # Remove and get the ID
+        
+        if not hardware_id:
+            return jsonify({'error': 'No ID provided'}), 400
+        
+        # Connect to database
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Update record
+            query = """
+            UPDATE dbo.Formatted_Company_Inventory 
+            SET manufacturer = ?,
+                model_number = ?,
+                hardware_type = ?,
+                serial_number = ?,
+                assigned_to = ?,
+                room_name = ?,
+                date_assigned = ?,
+                date_decommissioned = ?
+            WHERE id = ?;
+            """
+            
+            cursor.execute(query, (
+                data['manufacturer'],
+                data['model_number'],
+                data['hardware_type'],
+                data['serial_number'],
+                data.get('assigned_to'),
+                data.get('room_name'),
+                data.get('date_assigned'),
+                data.get('date_decommissioned'),
+                hardware_id
+            ))
+            
+            if cursor.rowcount == 0:
+                return jsonify({'error': 'Item not found'}), 404
+            
+            conn.commit()
+            return jsonify({'message': 'Hardware updated successfully'}), 200
+            
+    except Exception as e:
+        logging.error(f"Error updating hardware: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 400
 
 if __name__ == '__main__':
     app.run(debug=True)

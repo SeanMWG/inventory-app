@@ -31,12 +31,13 @@
             </div>
         </div>
         
-        <!-- Modal Form -->
+        <!-- Add/Edit Modal Form -->
         <div id="formModal" class="modal">
             <div class="modal-content">
                 <span class="close">&times;</span>
-                <h2>Add New Hardware</h2>
+                <h2 id="modalTitle">Add New Hardware</h2>
                 <form id="hardwareForm">
+                    <input type="hidden" id="hardwareId">
                     <div class="form-group">
                         <label for="manufacturer">Manufacturer:</label>
                         <input type="text" id="manufacturer" required>
@@ -77,7 +78,7 @@
                         <input type="date" id="dateDecommissioned">
                     </div>
                     
-                    <button type="submit">Add Hardware</button>
+                    <button type="submit" id="submitButton">Add Hardware</button>
                 </form>
             </div>
         </div>
@@ -101,6 +102,7 @@
                         <th class="sortable" data-sort="room">Room Name</th>
                         <th class="sortable" data-sort="dateAssigned">Date Assigned</th>
                         <th class="sortable" data-sort="dateDecommissioned">Date Decommissioned</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="inventoryBody">
@@ -112,15 +114,47 @@
     <script>
         // Modal controls
         const modal = document.getElementById('formModal');
-        const btn = document.getElementById('addHardwareBtn');
+        const addBtn = document.getElementById('addHardwareBtn');
         const span = document.getElementsByClassName('close')[0];
+        const form = document.getElementById('hardwareForm');
+        const modalTitle = document.getElementById('modalTitle');
+        const submitButton = document.getElementById('submitButton');
+        let editMode = false;
 
-        btn.onclick = () => modal.style.display = 'block';
+        addBtn.onclick = () => {
+            editMode = false;
+            modalTitle.textContent = 'Add New Hardware';
+            submitButton.textContent = 'Add Hardware';
+            form.reset();
+            document.getElementById('hardwareId').value = '';
+            modal.style.display = 'block';
+        };
+
         span.onclick = () => modal.style.display = 'none';
         window.onclick = (event) => {
             if (event.target == modal) {
                 modal.style.display = 'none';
             }
+        }
+
+        // Edit functionality
+        async function editHardware(item) {
+            editMode = true;
+            modalTitle.textContent = 'Edit Hardware';
+            submitButton.textContent = 'Update Hardware';
+            
+            // Fill form with item data
+            document.getElementById('hardwareId').value = item.id;
+            document.getElementById('manufacturer').value = item.manufacturer;
+            document.getElementById('modelNumber').value = item.model_number;
+            document.getElementById('hardwareType').value = item.hardware_type;
+            document.getElementById('serialNumber').value = item.serial_number;
+            document.getElementById('assignedTo').value = item.assigned_to || '';
+            document.getElementById('room_name').value = item.room_name || '';
+            document.getElementById('dateAssigned').value = item.date_assigned ? item.date_assigned.split('T')[0] : '';
+            document.getElementById('dateDecommissioned').value = item.date_decommissioned ? item.date_decommissioned.split('T')[0] : '';
+            
+            modal.style.display = 'block';
         }
 
         // Excel import functionality
@@ -173,18 +207,16 @@
             }
 
             importStatus.style.display = 'block';
-            // Keep error messages visible longer
             if (importStatus.className === 'error') {
                 setTimeout(() => {
                     importStatus.style.display = 'none';
-                }, 15000);  // 15 seconds for errors
+                }, 15000);
             } else {
                 setTimeout(() => {
                     importStatus.style.display = 'none';
-                }, 5000);   // 5 seconds for success
+                }, 5000);
             }
 
-            // Reset file input
             e.target.value = '';
         });
 
@@ -200,7 +232,7 @@
         });
 
         // Form submission
-        document.getElementById('hardwareForm').addEventListener('submit', async (e) => {
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const formData = {
@@ -208,15 +240,19 @@
                 model_number: document.getElementById('modelNumber').value,
                 hardware_type: document.getElementById('hardwareType').value,
                 serial_number: document.getElementById('serialNumber').value,
-                assigned_to: document.getElementById('assignedTo').value,
-                room_name: document.getElementById('room_name').value,
+                assigned_to: document.getElementById('assignedTo').value || null,
+                room_name: document.getElementById('room_name').value || null,
                 date_assigned: document.getElementById('dateAssigned').value || null,
                 date_decommissioned: document.getElementById('dateDecommissioned').value || null
             };
 
+            if (editMode) {
+                formData.id = document.getElementById('hardwareId').value;
+            }
+
             try {
                 const response = await fetch('/api/hardware', {
-                    method: 'POST',
+                    method: editMode ? 'PUT' : 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
@@ -224,12 +260,13 @@
                 });
 
                 if (response.ok) {
-                    alert('Hardware added successfully!');
-                    document.getElementById('hardwareForm').reset();
-                    loadInventory();
+                    alert(editMode ? 'Hardware updated successfully!' : 'Hardware added successfully!');
+                    form.reset();
+                    modal.style.display = 'none';
+                    loadInventory(currentPage);
                 } else {
                     const data = await response.json();
-                    alert('Error: ' + (data.error || 'Failed to add hardware'));
+                    alert('Error: ' + (data.error || `Failed to ${editMode ? 'update' : 'add'} hardware`));
                 }
             } catch (error) {
                 alert('Error: ' + error.message);
@@ -260,21 +297,23 @@
                 
                 if (Array.isArray(data.items)) {
                     data.items.forEach(item => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${item.manufacturer}</td>
-                        <td>${item.model_number}</td>
-                        <td>${item.hardware_type}</td>
-                        <td>${item.serial_number}</td>
-                        <td>${item.assigned_to || ''}</td>
-                        <td>${item.room_name || ''}</td>
-                        <td>${item.date_assigned ? new Date(item.date_assigned).toLocaleDateString() : ''}</td>
-                        <td>${item.date_decommissioned ? new Date(item.date_decommissioned).toLocaleDateString() : ''}</td>
-                    `;
-                    tbody.appendChild(row);
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.manufacturer}</td>
+                            <td>${item.model_number}</td>
+                            <td>${item.hardware_type}</td>
+                            <td>${item.serial_number}</td>
+                            <td>${item.assigned_to || ''}</td>
+                            <td>${item.room_name || ''}</td>
+                            <td>${item.date_assigned ? new Date(item.date_assigned).toLocaleDateString() : ''}</td>
+                            <td>${item.date_decommissioned ? new Date(item.date_decommissioned).toLocaleDateString() : ''}</td>
+                            <td>
+                                <button class="edit-button" onclick='editHardware(${JSON.stringify(item)})'>Edit</button>
+                            </td>
+                        `;
+                        tbody.appendChild(row);
                     });
 
-                    // Update pagination controls
                     document.getElementById('pageInfo').textContent = 
                         `Page ${data.current_page} of ${data.total_pages} (${data.total_items} items)`;
                     
@@ -305,7 +344,6 @@
             const tbody = document.getElementById('inventoryBody');
             const rows = Array.from(tbody.getElementsByTagName('tr'));
             
-            // Toggle sort direction if clicking the same column
             if (currentSort.column === column) {
                 currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
             } else {
@@ -313,12 +351,10 @@
                 currentSort.direction = 'asc';
             }
 
-            // Sort the rows
             rows.sort((a, b) => {
                 let aValue = a.getElementsByTagName('td')[getColumnIndex(column)].textContent;
                 let bValue = b.getElementsByTagName('td')[getColumnIndex(column)].textContent;
 
-                // Handle date sorting
                 if (column === 'dateAssigned' || column === 'dateDecommissioned') {
                     aValue = aValue ? new Date(aValue) : new Date(0);
                     bValue = bValue ? new Date(bValue) : new Date(0);
@@ -329,15 +365,11 @@
                 return 0;
             });
 
-            // Reorder the table
             rows.forEach(row => tbody.appendChild(row));
 
-            // Update sort indicators
             document.querySelectorAll('th.sortable').forEach(th => {
                 const sortColumn = th.getAttribute('data-sort');
-                // Remove all sort indicators first
                 th.textContent = th.textContent.replace(/[↑↓↕]$/, '').trim();
-                // Add the appropriate indicator
                 if (sortColumn === column) {
                     th.textContent += currentSort.direction === 'asc' ? ' ↑' : ' ↓';
                 } else {
@@ -372,7 +404,6 @@
         const themeToggle = document.getElementById('themeToggle');
         const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
         
-        // Set initial theme based on system preference
         if (prefersDarkScheme.matches) {
             document.body.setAttribute('data-theme', 'dark');
             themeToggle.innerHTML = '<span class="icon">🌜</span><span class="text">Dark Mode</span>';
