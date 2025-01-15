@@ -16,20 +16,75 @@
     <div class="container">
         <h1>IT Hardware Inventory</h1>
 
-        <!-- Search Field -->
-        <div class="search-container">
-            <input type="text" id="searchInput" placeholder="Search inventory...">
-        </div>
-
         <!-- Action Buttons -->
         <div class="action-buttons">
             <button id="addHardwareBtn" class="action-button">Add New Hardware</button>
+            <button id="toggleFilters" class="filter-button toggle-filters">Show Filters</button>
             <div class="import-container">
                 <input type="file" id="excelFile" accept=".xlsx" style="display: none;">
                 <button id="importBtn" class="action-button">Import from Excel</button>
                 <div id="importStatus"></div>
             </div>
         </div>
+
+        <!-- Filter Panel -->
+        <div id="filterPanel" class="filter-panel">
+            <h3>Advanced Filters</h3>
+            <div class="filter-grid">
+                <div class="filter-group">
+                    <label for="filterManufacturer">Manufacturer:</label>
+                    <input type="text" id="filterManufacturer">
+                </div>
+                <div class="filter-group">
+                    <label for="filterModel">Model Number:</label>
+                    <input type="text" id="filterModel">
+                </div>
+                <div class="filter-group">
+                    <label for="filterType">Hardware Type:</label>
+                    <input type="text" id="filterType">
+                </div>
+                <div class="filter-group">
+                    <label for="filterSerial">Serial Number:</label>
+                    <input type="text" id="filterSerial">
+                </div>
+                <div class="filter-group">
+                    <label for="filterAssigned">Assigned To:</label>
+                    <input type="text" id="filterAssigned">
+                </div>
+                <div class="filter-group">
+                    <label for="filterRoomName">Room Name:</label>
+                    <input type="text" id="filterRoomName">
+                </div>
+                <div class="filter-group">
+                    <label for="filterRoomNumber">Room Number:</label>
+                    <input type="text" id="filterRoomNumber">
+                </div>
+                <div class="filter-group">
+                    <label>Date Assigned Range:</label>
+                    <div class="date-range">
+                        <input type="date" id="filterDateAssignedFrom" placeholder="From">
+                        <input type="date" id="filterDateAssignedTo" placeholder="To">
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label>Date Decommissioned Range:</label>
+                    <div class="date-range">
+                        <input type="date" id="filterDateDecommissionedFrom" placeholder="From">
+                        <input type="date" id="filterDateDecommissionedTo" placeholder="To">
+                    </div>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button id="clearFilters" class="filter-button clear-filters">Clear Filters</button>
+                <button id="applyFilters" class="filter-button apply-filters">Apply Filters</button>
+            </div>
+        </div>
+
+        <!-- Search Field -->
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="Search inventory...">
+        </div>
+
         
         <!-- Add/Edit Modal Form -->
         <div id="formModal" class="modal">
@@ -67,6 +122,11 @@
                         <label for="room_name">Room Name:</label>
                         <input type="text" id="room_name">
                     </div>
+
+                    <div class="form-group">
+                        <label for="room_number">Room Number:</label>
+                        <input type="text" id="room_number">
+                    </div>
                     
                     <div class="form-group">
                         <label for="dateAssigned">Date Assigned:</label>
@@ -100,6 +160,7 @@
                         <th class="sortable" data-sort="serial">Serial Number</th>
                         <th class="sortable" data-sort="assigned">Assigned To</th>
                         <th class="sortable" data-sort="room">Room Name</th>
+                        <th class="sortable" data-sort="roomNumber">Room Number</th>
                         <th class="sortable" data-sort="dateAssigned">Date Assigned</th>
                         <th class="sortable" data-sort="dateDecommissioned">Date Decommissioned</th>
                         <th>Actions</th>
@@ -151,6 +212,7 @@
             document.getElementById('serialNumber').value = item.serial_number;
             document.getElementById('assignedTo').value = item.assigned_to || '';
             document.getElementById('room_name').value = item.room_name || '';
+            document.getElementById('room_number').value = item.room_number || '';
             document.getElementById('dateAssigned').value = item.date_assigned ? item.date_assigned.split('T')[0] : '';
             document.getElementById('dateDecommissioned').value = item.date_decommissioned ? item.date_decommissioned.split('T')[0] : '';
             
@@ -242,6 +304,7 @@
                 serial_number: document.getElementById('serialNumber').value,
                 assigned_to: document.getElementById('assignedTo').value || null,
                 room_name: document.getElementById('room_name').value || null,
+                room_number: document.getElementById('room_number').value || null,
                 date_assigned: document.getElementById('dateAssigned').value || null,
                 date_decommissioned: document.getElementById('dateDecommissioned').value || null
             };
@@ -273,13 +336,51 @@
             }
         });
 
+        // Filter functionality
+        const filterPanel = document.getElementById('filterPanel');
+        const toggleFilters = document.getElementById('toggleFilters');
+        const applyFilters = document.getElementById('applyFilters');
+        const clearFilters = document.getElementById('clearFilters');
+
+        toggleFilters.addEventListener('click', () => {
+            filterPanel.classList.toggle('active');
+            toggleFilters.textContent = filterPanel.classList.contains('active') ? 'Hide Filters' : 'Show Filters';
+        });
+
+        clearFilters.addEventListener('click', () => {
+            document.querySelectorAll('.filter-group input').forEach(input => {
+                input.value = '';
+            });
+            loadInventory(1);
+        });
+
+        applyFilters.addEventListener('click', () => {
+            loadInventory(1);
+        });
+
         // Load inventory data
         let currentPage = 1;
 
         async function loadInventory(page = 1) {
+            // Build query parameters
+            const params = new URLSearchParams({
+                page: page,
+                manufacturer: document.getElementById('filterManufacturer').value,
+                model_number: document.getElementById('filterModel').value,
+                hardware_type: document.getElementById('filterType').value,
+                serial_number: document.getElementById('filterSerial').value,
+                assigned_to: document.getElementById('filterAssigned').value,
+                room_name: document.getElementById('filterRoomName').value,
+                room_number: document.getElementById('filterRoomNumber').value,
+                date_assigned_from: document.getElementById('filterDateAssignedFrom').value,
+                date_assigned_to: document.getElementById('filterDateAssignedTo').value,
+                date_decommissioned_from: document.getElementById('filterDateDecommissionedFrom').value,
+                date_decommissioned_to: document.getElementById('filterDateDecommissionedTo').value
+            });
+
             try {
                 console.log("Fetching inventory data...");
-                const response = await fetch(`/api/hardware?page=${page}`);
+                const response = await fetch(`/api/hardware?${params.toString()}`);
                 console.log("Response status:", response.status);
                 
                 if (!response.ok) {
@@ -305,6 +406,7 @@
                             <td>${item.serial_number}</td>
                             <td>${item.assigned_to || ''}</td>
                             <td>${item.room_name || ''}</td>
+                            <td>${item.room_number || ''}</td>
                             <td>${item.date_assigned ? new Date(item.date_assigned).toLocaleDateString() : ''}</td>
                             <td>${item.date_decommissioned ? new Date(item.date_decommissioned).toLocaleDateString() : ''}</td>
                             <td>
@@ -386,8 +488,9 @@
                 'serial': 3,
                 'assigned': 4,
                 'room': 5,
-                'dateAssigned': 6,
-                'dateDecommissioned': 7
+                'roomNumber': 6,
+                'dateAssigned': 7,
+                'dateDecommissioned': 8
             };
             return columns[column];
         }

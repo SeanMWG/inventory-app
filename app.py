@@ -127,14 +127,79 @@ def get_hardware():
         page = request.args.get('page', 1, type=int)
         per_page = 35
         
+        # Get filter parameters
+        filters = {
+            'manufacturer': request.args.get('manufacturer'),
+            'model_number': request.args.get('model_number'),
+            'hardware_type': request.args.get('hardware_type'),
+            'serial_number': request.args.get('serial_number'),
+            'assigned_to': request.args.get('assigned_to'),
+            'room_name': request.args.get('room_name'),
+            'room_number': request.args.get('room_number'),
+            'date_assigned_from': request.args.get('date_assigned_from'),
+            'date_assigned_to': request.args.get('date_assigned_to'),
+            'date_decommissioned_from': request.args.get('date_decommissioned_from'),
+            'date_decommissioned_to': request.args.get('date_decommissioned_to')
+        }
+        
         logging.info(f"Fetching hardware items from database (page {page})")
         # Connect to database and execute queries
         with get_db_connection() as conn:
             cursor = conn.cursor()
             
-            # Get total count
-            count_sql = "SELECT COUNT(*) FROM dbo.Formatted_Company_Inventory"
-            cursor.execute(count_sql)
+            # Build WHERE clause based on filters
+            where_clauses = []
+            params = []
+            
+            if filters['manufacturer']:
+                where_clauses.append("manufacturer LIKE ?")
+                params.append(f"%{filters['manufacturer']}%")
+            
+            if filters['model_number']:
+                where_clauses.append("model_number LIKE ?")
+                params.append(f"%{filters['model_number']}%")
+            
+            if filters['hardware_type']:
+                where_clauses.append("hardware_type LIKE ?")
+                params.append(f"%{filters['hardware_type']}%")
+            
+            if filters['serial_number']:
+                where_clauses.append("serial_number LIKE ?")
+                params.append(f"%{filters['serial_number']}%")
+            
+            if filters['assigned_to']:
+                where_clauses.append("assigned_to LIKE ?")
+                params.append(f"%{filters['assigned_to']}%")
+            
+            if filters['room_name']:
+                where_clauses.append("room_name LIKE ?")
+                params.append(f"%{filters['room_name']}%")
+            
+            if filters['room_number']:
+                where_clauses.append("room_number LIKE ?")
+                params.append(f"%{filters['room_number']}%")
+            
+            if filters['date_assigned_from']:
+                where_clauses.append("date_assigned >= ?")
+                params.append(filters['date_assigned_from'])
+            
+            if filters['date_assigned_to']:
+                where_clauses.append("date_assigned <= ?")
+                params.append(filters['date_assigned_to'])
+            
+            if filters['date_decommissioned_from']:
+                where_clauses.append("date_decommissioned >= ?")
+                params.append(filters['date_decommissioned_from'])
+            
+            if filters['date_decommissioned_to']:
+                where_clauses.append("date_decommissioned <= ?")
+                params.append(filters['date_decommissioned_to'])
+            
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+            
+            # Get total count with filters
+            count_sql = f"SELECT COUNT(*) FROM dbo.Formatted_Company_Inventory WHERE {where_sql}"
+            cursor.execute(count_sql, params)
             total_items = cursor.fetchval()
             logging.info(f"Total items: {total_items}")
             
@@ -143,22 +208,21 @@ def get_hardware():
             
             # Get items for current page
             offset = (page - 1) * per_page
-            query = """
-            SELECT TOP (?) [manufacturer], [model_number], [hardware_type], [serial_number],
-                   [assigned_to], [room_name], [date_assigned], [date_decommissioned]
+            query = f"""
+            SELECT [manufacturer], [model_number], [hardware_type], [serial_number],
+                   [assigned_to], [room_name], [room_number], [date_assigned], [date_decommissioned]
             FROM [dbo].[Formatted_Company_Inventory]
-            WHERE [serial_number] > (
-                SELECT ISNULL(MAX([serial_number]), '')
-                FROM (
-                    SELECT TOP (?) [serial_number]
-                    FROM [dbo].[Formatted_Company_Inventory]
-                    ORDER BY [serial_number]
-                ) AS t
-            )
-            ORDER BY [serial_number];
+            WHERE {where_sql}
+            ORDER BY [serial_number]
+            OFFSET ? ROWS
+            FETCH NEXT ? ROWS ONLY;
             """
+            
+            # Add pagination parameters
+            query_params = params + [offset, per_page]
+            
             logging.info(f"Executing query for page {page} (offset {offset})...")
-            cursor.execute(query, (per_page, offset))
+            cursor.execute(query, query_params)
             
             # Get column names and fetch rows
             columns = [column[0] for column in cursor.description]
@@ -210,8 +274,8 @@ def add_hardware():
             query = """
             INSERT INTO dbo.Formatted_Company_Inventory 
             (manufacturer, model_number, hardware_type, serial_number, 
-             assigned_to, room_name, date_assigned, date_decommissioned)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+             assigned_to, room_name, room_number, date_assigned, date_decommissioned)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
             """
             
             cursor.execute(query, (
@@ -221,6 +285,7 @@ def add_hardware():
                 data['serial_number'],
                 data.get('assigned_to'),
                 data.get('room_name'),
+                data.get('room_number'),
                 data.get('date_assigned'),
                 data.get('date_decommissioned')
             ))
@@ -279,7 +344,7 @@ def import_excel():
             
             # Expected columns
             required_columns = ['manufacturer', 'model_number', 'hardware_type', 'serial_number']
-            optional_columns = ['assigned_to', 'room_name', 'date_assigned', 'date_decommissioned']
+            optional_columns = ['assigned_to', 'room_name', 'room_number', 'date_assigned', 'date_decommissioned']
             
             logging.info(f"Checking required columns: {required_columns}")
             
@@ -304,8 +369,8 @@ def import_excel():
                         query = """
                         INSERT INTO dbo.Formatted_Company_Inventory 
                         (manufacturer, model_number, hardware_type, serial_number, 
-                         assigned_to, room_name, date_assigned, date_decommissioned)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                         assigned_to, room_name, room_number, date_assigned, date_decommissioned)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
                         """
                         
                         # Convert dates to string format if they exist
@@ -329,6 +394,7 @@ def import_excel():
                             row['serial_number'],
                             row.get('assigned_to'),
                             row.get('room_name'),
+                            row.get('room_number'),
                             date_assigned,
                             date_decommissioned
                         ))
@@ -377,6 +443,7 @@ def update_hardware():
                 serial_number = ?,
                 assigned_to = ?,
                 room_name = ?,
+                room_number = ?,
                 date_assigned = ?,
                 date_decommissioned = ?
             WHERE id = ?;
@@ -389,6 +456,7 @@ def update_hardware():
                 data['serial_number'],
                 data.get('assigned_to'),
                 data.get('room_name'),
+                data.get('room_number'),
                 data.get('date_assigned'),
                 data.get('date_decommissioned'),
                 hardware_id
