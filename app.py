@@ -64,15 +64,18 @@ def login_required(f):
 
 # Hardware Model
 class Hardware(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    manufacturer = db.Column(db.String(100), nullable=False)
-    model_number = db.Column(db.String(100), nullable=False)
-    hardware_type = db.Column(db.String(50), nullable=False)
-    serial_number = db.Column(db.String(100), unique=True, nullable=False)
+    __tablename__ = 'Formatted_Company_Inventory'
+    __table_args__ = {'schema': 'dbo'}
+    
+    # Using serial_number as primary key since it's unique
+    serial_number = db.Column(db.String(100), primary_key=True)
+    manufacturer = db.Column(db.String(100))
+    model_number = db.Column(db.String(100))
+    hardware_type = db.Column(db.String(100))
     assigned_to = db.Column(db.String(100))
     room_name = db.Column(db.String(100))
-    date_assigned = db.Column(db.DateTime)
-    date_decommissioned = db.Column(db.DateTime)
+    date_assigned = db.Column(db.String(100))
+    date_decommissioned = db.Column(db.String(100))
 
 # Create tables
 with app.app_context():
@@ -114,24 +117,20 @@ def authorized():
 def get_hardware():
     hardware_items = Hardware.query.all()
     return jsonify([{
-        'id': item.id,
         'manufacturer': item.manufacturer,
         'model_number': item.model_number,
         'hardware_type': item.hardware_type,
         'serial_number': item.serial_number,
         'assigned_to': item.assigned_to,
         'room_name': item.room_name,
-        'date_assigned': item.date_assigned.isoformat() if item.date_assigned else None,
-        'date_decommissioned': item.date_decommissioned.isoformat() if item.date_decommissioned else None
+        'date_assigned': item.date_assigned,
+        'date_decommissioned': item.date_decommissioned
     } for item in hardware_items])
 
 @app.route('/api/hardware', methods=['POST'])
 @login_required
 def add_hardware():
     data = request.json
-    
-    date_assigned = datetime.fromisoformat(data['date_assigned']) if data.get('date_assigned') else None
-    date_decommissioned = datetime.fromisoformat(data['date_decommissioned']) if data.get('date_decommissioned') else None
     
     new_hardware = Hardware(
         manufacturer=data['manufacturer'],
@@ -140,8 +139,8 @@ def add_hardware():
         serial_number=data['serial_number'],
         assigned_to=data.get('assigned_to'),
         room_name=data.get('room_name'),
-        date_assigned=date_assigned,
-        date_decommissioned=date_decommissioned
+        date_assigned=data.get('date_assigned'),
+        date_decommissioned=data.get('date_decommissioned')
     )
     
     db.session.add(new_hardware)
@@ -162,46 +161,64 @@ def serve_static(path):
     return send_from_directory('.', path)
 
 # Excel import route
+import logging
+import sys
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
 @app.route('/api/import', methods=['POST'])
 @login_required
 def import_excel():
+    logging.info("Starting import process")
+    
     if 'file' not in request.files:
+        logging.error("No file in request")
         return jsonify({'error': 'No file provided'}), 400
     
     file = request.files['file']
     if file.filename == '':
+        logging.error("Empty filename")
         return jsonify({'error': 'No file selected'}), 400
     
     if not file.filename.endswith('.xlsx'):
+        logging.error(f"Invalid file type: {file.filename}")
         return jsonify({'error': 'Please upload an Excel file (.xlsx)'}), 400
 
     try:
-        print("Starting Excel import...")  # Debug log
+        logging.info(f"Processing file: {file.filename}")
         # Create a temporary file to store the upload
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
             file.save(tmp.name)
-            print(f"File saved to temp location: {tmp.name}")  # Debug log
+            logging.info(f"File saved to: {tmp.name}")
             
             # Read Excel file
             try:
                 df = pd.read_excel(tmp.name)
-                print(f"Excel file read successfully. Columns: {df.columns.tolist()}")  # Debug log
+                logging.info(f"Excel file read successfully")
+                logging.info(f"Found columns: {df.columns.tolist()}")
+                logging.info(f"First row: {df.iloc[0].to_dict()}")
             except Exception as e:
-                print(f"Error reading Excel file: {str(e)}")  # Debug log
+                logging.error(f"Error reading Excel file: {str(e)}")
                 return jsonify({'error': f'Error reading Excel file: {str(e)}'}), 400
             
             # Expected columns
             required_columns = ['manufacturer', 'model_number', 'hardware_type', 'serial_number']
             optional_columns = ['assigned_to', 'room_name', 'date_assigned', 'date_decommissioned']
             
-            print(f"Required columns: {required_columns}")  # Debug log
-            print(f"Found columns: {df.columns.tolist()}")  # Debug log
+            logging.info(f"Checking required columns: {required_columns}")
             
             # Verify required columns exist
             missing_columns = [col for col in required_columns if col not in df.columns]
             if missing_columns:
-                error_msg = f'Missing required columns: {", ".join(missing_columns)}'
-                print(f"Error: {error_msg}")  # Debug log
+                error_msg = f'Missing required columns: {", ".join(missing_columns)}. Found columns: {df.columns.tolist()}'
+                logging.error(error_msg)
                 return jsonify({'error': error_msg}), 400
             
             # Import records
@@ -227,7 +244,8 @@ def import_excel():
                     success_count += 1
                 except Exception as e:
                     error_msg = f"Row {index + 2}: {str(e)}"
-                    print(f"Error processing row: {error_msg}")  # Debug log
+                    logging.error(f"Error processing row: {error_msg}")
+                    logging.error(f"Row data: {row.to_dict()}")
                     error_count += 1
                     errors.append(error_msg)
                     db.session.rollback()
@@ -242,7 +260,8 @@ def import_excel():
                 
     except Exception as e:
         error_msg = f'Error processing file: {str(e)}'
-        print(f"Error: {error_msg}")  # Debug log
+        logging.error(f"Unexpected error: {error_msg}")
+        logging.error(f"Exception details:", exc_info=True)
         return jsonify({'error': error_msg}), 500
 
 if __name__ == '__main__':
