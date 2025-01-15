@@ -1,3 +1,3 @@
 [config]
 SCM_DO_BUILD_DURING_DEPLOYMENT=true
-branch=main
+POST_BUILD_SCRIPT=install.cmd
