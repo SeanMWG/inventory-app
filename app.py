@@ -176,20 +176,33 @@ def import_excel():
         return jsonify({'error': 'Please upload an Excel file (.xlsx)'}), 400
 
     try:
+        print("Starting Excel import...")  # Debug log
         # Create a temporary file to store the upload
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
             file.save(tmp.name)
+            print(f"File saved to temp location: {tmp.name}")  # Debug log
+            
             # Read Excel file
-            df = pd.read_excel(tmp.name)
+            try:
+                df = pd.read_excel(tmp.name)
+                print(f"Excel file read successfully. Columns: {df.columns.tolist()}")  # Debug log
+            except Exception as e:
+                print(f"Error reading Excel file: {str(e)}")  # Debug log
+                return jsonify({'error': f'Error reading Excel file: {str(e)}'}), 400
             
             # Expected columns
             required_columns = ['manufacturer', 'model_number', 'hardware_type', 'serial_number']
             optional_columns = ['assigned_to', 'room_name', 'date_assigned', 'date_decommissioned']
             
+            print(f"Required columns: {required_columns}")  # Debug log
+            print(f"Found columns: {df.columns.tolist()}")  # Debug log
+            
             # Verify required columns exist
             missing_columns = [col for col in required_columns if col not in df.columns]
             if missing_columns:
-                return jsonify({'error': f'Missing required columns: {", ".join(missing_columns)}'}), 400
+                error_msg = f'Missing required columns: {", ".join(missing_columns)}'
+                print(f"Error: {error_msg}")  # Debug log
+                return jsonify({'error': error_msg}), 400
             
             # Import records
             success_count = 0
@@ -213,8 +226,10 @@ def import_excel():
                     db.session.commit()
                     success_count += 1
                 except Exception as e:
+                    error_msg = f"Row {index + 2}: {str(e)}"
+                    print(f"Error processing row: {error_msg}")  # Debug log
                     error_count += 1
-                    errors.append(f"Row {index + 2}: {str(e)}")
+                    errors.append(error_msg)
                     db.session.rollback()
             
             # Clean up temp file
@@ -226,7 +241,9 @@ def import_excel():
             })
                 
     except Exception as e:
-        return jsonify({'error': f'Error processing file: {str(e)}'}), 500
+        error_msg = f'Error processing file: {str(e)}'
+        print(f"Error: {error_msg}")  # Debug log
+        return jsonify({'error': error_msg}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
