@@ -116,14 +116,23 @@ def authorized():
 # @login_required  # Temporarily disabled
 def get_hardware():
     try:
-        logging.info("Fetching hardware items from database")
+        page = request.args.get('page', 1, type=int)
+        per_page = 25
+        
+        logging.info(f"Fetching hardware items from database (page {page})")
         query = Hardware.query
         logging.info(f"SQL Query: {str(query)}")
         
-        hardware_items = query.all()
-        logging.info(f"Found {len(hardware_items)} items")
+        # Get total count for pagination
+        total_items = query.count()
+        total_pages = (total_items + per_page - 1) // per_page
         
-        result = [{
+        # Get paginated items
+        hardware_items = query.offset((page - 1) * per_page).limit(per_page).all()
+        logging.info(f"Found {len(hardware_items)} items on page {page}")
+        
+        result = {
+            'items': [{
         'manufacturer': item.manufacturer,
         'model_number': item.model_number,
         'hardware_type': item.hardware_type,
@@ -132,7 +141,11 @@ def get_hardware():
         'room_name': item.room_name,
         'date_assigned': item.date_assigned,
         'date_decommissioned': item.date_decommissioned
-        } for item in hardware_items]
+            } for item in hardware_items],
+            'total_pages': total_pages,
+            'current_page': page,
+            'total_items': total_items
+        }
         
         logging.info("Successfully serialized items")
         return jsonify(result)

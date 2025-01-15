@@ -12,8 +12,6 @@
             <span class="icon">🌞</span>
             <span class="text">Light Mode</span>
         </button>
-        <button id="loginBtn" class="auth-button" onclick="window.location.href='/login'">Sign In</button>
-        <button id="logoutBtn" class="auth-button" onclick="window.location.href='/logout'" style="display: none;">Sign Out</button>
     </div>
     <div class="container">
         <h1>IT Hardware Inventory</h1>
@@ -87,6 +85,11 @@
         <!-- Hardware List -->
         <div class="inventory-list">
             <h2>Current Inventory</h2>
+            <div class="pagination">
+                <button id="prevPage" class="page-button">&lt; Previous</button>
+                <span id="pageInfo"></span>
+                <button id="nextPage" class="page-button">Next &gt;</button>
+            </div>
             <table id="inventoryTable">
                 <thead>
                     <tr>
@@ -234,10 +237,12 @@
         });
 
         // Load inventory data
-        async function loadInventory() {
+        let currentPage = 1;
+
+        async function loadInventory(page = 1) {
             try {
                 console.log("Fetching inventory data...");
-                const response = await fetch('/api/hardware');
+                const response = await fetch(`/api/hardware?page=${page}`);
                 console.log("Response status:", response.status);
                 
                 if (!response.ok) {
@@ -247,14 +252,14 @@
                 const text = await response.text();
                 console.log("Response text:", text);
                 
-                const data = text ? JSON.parse(text) : [];
+                const data = text ? JSON.parse(text) : { items: [] };
                 console.log("Parsed data:", data);
                 
                 const tbody = document.getElementById('inventoryBody');
                 tbody.innerHTML = '';
                 
-                if (Array.isArray(data)) {
-                    data.forEach(item => {
+                if (Array.isArray(data.items)) {
+                    data.items.forEach(item => {
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td>${item.manufacturer}</td>
@@ -268,6 +273,15 @@
                     `;
                     tbody.appendChild(row);
                     });
+
+                    // Update pagination controls
+                    document.getElementById('pageInfo').textContent = 
+                        `Page ${data.current_page} of ${data.total_pages} (${data.total_items} items)`;
+                    
+                    document.getElementById('prevPage').disabled = data.current_page <= 1;
+                    document.getElementById('nextPage').disabled = data.current_page >= data.total_pages;
+                    
+                    currentPage = data.current_page;
                 } else if (data.error) {
                     console.error('Server error:', data.error);
                     alert('Error loading inventory: ' + data.error);
@@ -375,37 +389,19 @@
             }
         });
 
-        // Check authentication status
-        async function checkAuth() {
-            try {
-                const response = await fetch('/api/hardware');
-                if (response.redirected) {
-                    // If redirected to login page
-                    document.getElementById('loginBtn').style.display = 'block';
-                    document.getElementById('logoutBtn').style.display = 'none';
-                    return false;
-                } else if (response.ok) {
-                    // If authenticated
-                    document.getElementById('loginBtn').style.display = 'none';
-                    document.getElementById('logoutBtn').style.display = 'block';
-                    return true;
-                }
-            } catch (error) {
-                console.error('Error checking auth:', error);
-                return false;
+        // Pagination event listeners
+        document.getElementById('prevPage').addEventListener('click', () => {
+            if (currentPage > 1) {
+                loadInventory(currentPage - 1);
             }
-        }
+        });
 
-        // Load inventory on page load
-        async function init() {
-            // Temporarily disabled auth check
-            // const isAuthenticated = await checkAuth();
-            // if (isAuthenticated) {
-                loadInventory();
-            // }
-        }
+        document.getElementById('nextPage').addEventListener('click', () => {
+            loadInventory(currentPage + 1);
+        });
 
-        init();
+        // Load first page on init
+        loadInventory(1);
     </script>
 </body>
 </html>
