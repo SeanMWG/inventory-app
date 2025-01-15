@@ -115,8 +115,15 @@ def authorized():
 @app.route('/api/hardware', methods=['GET'])
 @login_required
 def get_hardware():
-    hardware_items = Hardware.query.all()
-    return jsonify([{
+    try:
+        logging.info("Fetching hardware items from database")
+        query = Hardware.query
+        logging.info(f"SQL Query: {str(query)}")
+        
+        hardware_items = query.all()
+        logging.info(f"Found {len(hardware_items)} items")
+        
+        result = [{
         'manufacturer': item.manufacturer,
         'model_number': item.model_number,
         'hardware_type': item.hardware_type,
@@ -125,7 +132,13 @@ def get_hardware():
         'room_name': item.room_name,
         'date_assigned': item.date_assigned,
         'date_decommissioned': item.date_decommissioned
-    } for item in hardware_items])
+        } for item in hardware_items]
+        
+        logging.info("Successfully serialized items")
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"Error fetching hardware: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Error fetching hardware: {str(e)}'}), 500
 
 @app.route('/api/hardware', methods=['POST'])
 @login_required
