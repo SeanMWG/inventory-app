@@ -398,10 +398,11 @@
 
         // Load inventory on page load
         async function init() {
-            const isAuthenticated = await checkAuth();
-            if (isAuthenticated) {
+            // Temporarily disabled auth check
+            // const isAuthenticated = await checkAuth();
+            // if (isAuthenticated) {
                 loadInventory();
-            }
+            // }
         }
 
         init();

@@ -113,7 +113,7 @@ def authorized():
 
 # Protected routes
 @app.route('/api/hardware', methods=['GET'])
-@login_required
+# @login_required  # Temporarily disabled
 def get_hardware():
     try:
         logging.info("Fetching hardware items from database")
@@ -141,7 +141,7 @@ def get_hardware():
         return jsonify({'error': f'Error fetching hardware: {str(e)}'}), 500
 
 @app.route('/api/hardware', methods=['POST'])
-@login_required
+# @login_required  # Temporarily disabled
 def add_hardware():
     data = request.json
     
@@ -187,7 +187,7 @@ logging.basicConfig(
 )
 
 @app.route('/api/import', methods=['POST'])
-@login_required
+# @login_required  # Temporarily disabled
 def import_excel():
     logging.info("Starting import process")
     
