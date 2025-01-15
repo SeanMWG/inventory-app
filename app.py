@@ -129,13 +129,15 @@ def get_hardware():
         
         # Get filter parameters
         filters = {
-            'manufacturer': request.args.get('manufacturer'),
-            'model_number': request.args.get('model_number'),
-            'hardware_type': request.args.get('hardware_type'),
-            'serial_number': request.args.get('serial_number'),
-            'assigned_to': request.args.get('assigned_to'),
-            'room_name': request.args.get('room_name'),
+            'site_name': request.args.get('site_name'),
             'room_number': request.args.get('room_number'),
+            'room_name': request.args.get('room_name'),
+            'asset_tag': request.args.get('asset_tag'),
+            'asset_type': request.args.get('asset_type'),
+            'model': request.args.get('model'),
+            'serial_number': request.args.get('serial_number'),
+            'notes': request.args.get('notes'),
+            'assigned_to': request.args.get('assigned_to'),
             'date_assigned_from': request.args.get('date_assigned_from'),
             'date_assigned_to': request.args.get('date_assigned_to'),
             'date_decommissioned_from': request.args.get('date_decommissioned_from'),
@@ -151,33 +153,11 @@ def get_hardware():
             where_clauses = []
             params = []
             
-            if filters['manufacturer']:
-                where_clauses.append("manufacturer LIKE ?")
-                params.append(f"%{filters['manufacturer']}%")
-            
-            if filters['model_number']:
-                where_clauses.append("model_number LIKE ?")
-                params.append(f"%{filters['model_number']}%")
-            
-            if filters['hardware_type']:
-                where_clauses.append("hardware_type LIKE ?")
-                params.append(f"%{filters['hardware_type']}%")
-            
-            if filters['serial_number']:
-                where_clauses.append("serial_number LIKE ?")
-                params.append(f"%{filters['serial_number']}%")
-            
-            if filters['assigned_to']:
-                where_clauses.append("assigned_to LIKE ?")
-                params.append(f"%{filters['assigned_to']}%")
-            
-            if filters['room_name']:
-                where_clauses.append("room_name LIKE ?")
-                params.append(f"%{filters['room_name']}%")
-            
-            if filters['room_number']:
-                where_clauses.append("room_number LIKE ?")
-                params.append(f"%{filters['room_number']}%")
+            for field in ['site_name', 'room_number', 'room_name', 'asset_tag', 
+                         'asset_type', 'model', 'serial_number', 'notes', 'assigned_to']:
+                if filters[field]:
+                    where_clauses.append(f"{field} LIKE ?")
+                    params.append(f"%{filters[field]}%")
             
             if filters['date_assigned_from']:
                 where_clauses.append("date_assigned >= ?")
@@ -209,11 +189,11 @@ def get_hardware():
             # Get items for current page
             offset = (page - 1) * per_page
             query = f"""
-            SELECT [manufacturer], [model_number], [hardware_type], [serial_number],
-                   [assigned_to], [room_name], [room_number], [date_assigned], [date_decommissioned]
+            SELECT [site_name], [room_number], [room_name], [asset_tag], [asset_type],
+                   [model], [serial_number], [notes], [assigned_to], [date_assigned], [date_decommissioned]
             FROM [dbo].[Formatted_Company_Inventory]
             WHERE {where_sql}
-            ORDER BY [serial_number]
+            ORDER BY [site_name], [room_number]
             OFFSET ? ROWS
             FETCH NEXT ? ROWS ONLY;
             """
@@ -273,19 +253,21 @@ def add_hardware():
             # Insert new record
             query = """
             INSERT INTO dbo.Formatted_Company_Inventory 
-            (manufacturer, model_number, hardware_type, serial_number, 
-             assigned_to, room_name, room_number, date_assigned, date_decommissioned)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+            (site_name, room_number, room_name, asset_tag, asset_type,
+             model, serial_number, notes, assigned_to, date_assigned, date_decommissioned)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """
             
             cursor.execute(query, (
-                data['manufacturer'],
-                data['model_number'],
-                data['hardware_type'],
+                data['site_name'],
+                data['room_number'],
+                data['room_name'],
+                data['asset_tag'],
+                data['asset_type'],
+                data['model'],
                 data['serial_number'],
+                data.get('notes'),
                 data.get('assigned_to'),
-                data.get('room_name'),
-                data.get('room_number'),
                 data.get('date_assigned'),
                 data.get('date_decommissioned')
             ))
@@ -306,7 +288,6 @@ def serve_static(path):
     return send_from_directory('.', path)
 
 # Excel import route
-
 @app.route('/api/import', methods=['POST'])
 # @login_required  # Temporarily disabled
 def import_excel():
@@ -343,8 +324,8 @@ def import_excel():
                 return jsonify({'error': f'Error reading Excel file: {str(e)}'}), 400
             
             # Expected columns
-            required_columns = ['manufacturer', 'model_number', 'hardware_type', 'serial_number']
-            optional_columns = ['assigned_to', 'room_name', 'room_number', 'date_assigned', 'date_decommissioned']
+            required_columns = ['site_name', 'room_number', 'room_name', 'asset_tag', 'asset_type', 'model', 'serial_number']
+            optional_columns = ['notes', 'assigned_to', 'date_assigned', 'date_decommissioned']
             
             logging.info(f"Checking required columns: {required_columns}")
             
@@ -368,9 +349,9 @@ def import_excel():
                         # Insert new record
                         query = """
                         INSERT INTO dbo.Formatted_Company_Inventory 
-                        (manufacturer, model_number, hardware_type, serial_number, 
-                         assigned_to, room_name, room_number, date_assigned, date_decommissioned)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                        (site_name, room_number, room_name, asset_tag, asset_type,
+                         model, serial_number, notes, assigned_to, date_assigned, date_decommissioned)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                         """
                         
                         # Convert dates to string format if they exist
@@ -388,13 +369,15 @@ def import_excel():
                             date_decommissioned = None
                         
                         cursor.execute(query, (
-                            row['manufacturer'],
-                            row['model_number'],
-                            row['hardware_type'],
+                            row['site_name'],
+                            row['room_number'],
+                            row['room_name'],
+                            row['asset_tag'],
+                            row['asset_type'],
+                            row['model'],
                             row['serial_number'],
+                            row.get('notes'),
                             row.get('assigned_to'),
-                            row.get('room_name'),
-                            row.get('room_number'),
                             date_assigned,
                             date_decommissioned
                         ))
@@ -437,26 +420,30 @@ def update_hardware():
             # Update record
             query = """
             UPDATE dbo.Formatted_Company_Inventory 
-            SET manufacturer = ?,
-                model_number = ?,
-                hardware_type = ?,
-                serial_number = ?,
-                assigned_to = ?,
-                room_name = ?,
+            SET site_name = ?,
                 room_number = ?,
+                room_name = ?,
+                asset_tag = ?,
+                asset_type = ?,
+                model = ?,
+                serial_number = ?,
+                notes = ?,
+                assigned_to = ?,
                 date_assigned = ?,
                 date_decommissioned = ?
             WHERE id = ?;
             """
             
             cursor.execute(query, (
-                data['manufacturer'],
-                data['model_number'],
-                data['hardware_type'],
+                data['site_name'],
+                data['room_number'],
+                data['room_name'],
+                data['asset_tag'],
+                data['asset_type'],
+                data['model'],
                 data['serial_number'],
+                data.get('notes'),
                 data.get('assigned_to'),
-                data.get('room_name'),
-                data.get('room_number'),
                 data.get('date_assigned'),
                 data.get('date_decommissioned'),
                 hardware_id
