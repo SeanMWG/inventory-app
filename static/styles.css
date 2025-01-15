@@ -66,16 +66,21 @@ h2 {
 
 /* Theme Toggle Button */
 .theme-toggle {
-    padding: 8px 16px;
+    padding: 6px 10px;
     background-color: var(--header-bg);
     border: 1px solid var(--border-color);
-    border-radius: 20px;
+    border-radius: 15px;
     cursor: pointer;
     color: var(--text-color);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
     transition: all 0.3s ease;
+    font-size: 14px;
+}
+
+.theme-toggle .icon {
+    font-size: 14px;
 }
 
 .theme-toggle:hover,
@@ -94,8 +99,48 @@ h2 {
     transition: all 0.3s ease;
 }
 
-.theme-toggle .icon {
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.action-button {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
     font-size: 16px;
+}
+
+.action-button:hover {
+    background-color: #0056b3;
+}
+
+.import-container {
+    position: relative;
+}
+
+#importStatus {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 4px;
+    display: none;
+}
+
+#importStatus.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+#importStatus.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
 }
 
 /* Search Container */
@@ -107,8 +152,10 @@ h2 {
     width: 100%;
     padding: 12px;
     font-size: 16px;
-    border: 2px solid #ddd;
+    border: 2px solid var(--border-color);
     border-radius: 4px;
+    background-color: var(--container-bg);
+    color: var(--text-color);
 }
 
 .search-container input:focus {
@@ -116,25 +163,20 @@ h2 {
     outline: none;
 }
 
-/* Add Button */
-.add-button {
-    margin-bottom: 20px;
-}
-
 /* Modal */
 .modal {
-    display: none; /* Hidden by default */
+    display: none;
     position: fixed;
     z-index: 1;
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0,0,0,0.5);
+    background-color: var(--modal-overlay);
 }
 
 .modal-content {
-    background-color: #fff;
+    background-color: var(--container-bg);
     max-height: 90vh;
     overflow-y: auto;
     margin: 5% auto;
@@ -143,6 +185,7 @@ h2 {
     width: 80%;
     max-width: 800px;
     position: relative;
+    color: var(--text-color);
 }
 
 .close {
@@ -152,11 +195,11 @@ h2 {
     font-size: 28px;
     font-weight: bold;
     cursor: pointer;
-    color: #666;
+    color: var(--text-color);
 }
 
 .close:hover {
-    color: #000;
+    opacity: 0.7;
 }
 
 .form-group {
@@ -166,16 +209,18 @@ h2 {
 label {
     display: block;
     margin-bottom: 5px;
-    color: #555;
+    color: var(--text-color);
 }
 
 input[type="text"],
 input[type="date"] {
     width: 100%;
     padding: 8px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-color);
     border-radius: 4px;
     font-size: 14px;
+    background-color: var(--container-bg);
+    color: var(--text-color);
 }
 
 input[type="text"]:focus,
@@ -183,20 +228,6 @@ input[type="date"]:focus {
     outline: none;
     border-color: #007bff;
     box-shadow: 0 0 5px rgba(0, 123, 255, 0.2);
-}
-
-button {
-    background-color: #007bff;
-    color: white;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 16px;
-}
-
-button:hover {
-    background-color: #0056b3;
 }
 
 .inventory-list {
@@ -212,7 +243,7 @@ table {
 th, td {
     padding: 12px;
     text-align: left;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--border-color);
 }
 
 th {
@@ -226,33 +257,15 @@ th {
 th.sortable {
     padding-right: 25px;
     position: relative;
-}
-
-th.sortable:hover {
-    background-color: #e9ecef;
     cursor: pointer;
 }
 
-
-tr:hover {
+th.sortable:hover {
     background-color: var(--hover-bg);
 }
 
-input[type="text"],
-input[type="date"] {
-    background-color: var(--container-bg);
-    color: var(--text-color);
-    border-color: var(--border-color);
-}
-
-input[type="text"]:focus,
-input[type="date"]:focus {
-    border-color: #007bff;
-}
-
-.modal-content {
-    background-color: var(--container-bg);
-    color: var(--text-color);
+tr:hover {
+    background-color: var(--hover-bg);
 }
 
 @media (max-width: 768px) {

@@ -1,0 +1,4 @@
+manufacturer,model_number,hardware_type,serial_number,assigned_to,location,date_assigned,date_decommissioned
+Dell,Latitude 5420,Laptop,ABC123,John Doe,Main Office,2024-01-14,
+HP,ProDesk 600,Desktop,XYZ789,Jane Smith,Branch Office,2024-01-01,
+Lenovo,ThinkPad X1,Laptop,DEF456,,,2024-01-10,

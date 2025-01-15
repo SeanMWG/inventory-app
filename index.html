@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IT Hardware Inventory</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="static/styles.css">
 </head>
 <body>
     <div class="top-buttons">
@@ -23,57 +23,64 @@
             <input type="text" id="searchInput" placeholder="Search inventory...">
         </div>
 
-        <!-- Add Hardware Button -->
-        <button id="addHardwareBtn" class="add-button">Add New Hardware</button>
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button id="addHardwareBtn" class="action-button">Add New Hardware</button>
+            <div class="import-container">
+                <input type="file" id="excelFile" accept=".xlsx" style="display: none;">
+                <button id="importBtn" class="action-button">Import from Excel</button>
+                <div id="importStatus"></div>
+            </div>
+        </div>
         
         <!-- Modal Form -->
         <div id="formModal" class="modal">
             <div class="modal-content">
                 <span class="close">&times;</span>
-            <h2>Add New Hardware</h2>
-            <form id="hardwareForm">
-                <div class="form-group">
-                    <label for="manufacturer">Manufacturer:</label>
-                    <input type="text" id="manufacturer" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="modelNumber">Model Number:</label>
-                    <input type="text" id="modelNumber" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="hardwareType">Hardware Type:</label>
-                    <input type="text" id="hardwareType" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="serialNumber">Serial/Service Tag Number:</label>
-                    <input type="text" id="serialNumber" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="assignedTo">Assigned To:</label>
-                    <input type="text" id="assignedTo">
-                </div>
-                
-                <div class="form-group">
-                    <label for="location">Location:</label>
-                    <input type="text" id="location">
-                </div>
-                
-                <div class="form-group">
-                    <label for="dateAssigned">Date Assigned:</label>
-                    <input type="date" id="dateAssigned">
-                </div>
-                
-                <div class="form-group">
-                    <label for="dateDecommissioned">Date Decommissioned:</label>
-                    <input type="date" id="dateDecommissioned">
-                </div>
-                
-                <button type="submit">Add Hardware</button>
-            </form>
+                <h2>Add New Hardware</h2>
+                <form id="hardwareForm">
+                    <div class="form-group">
+                        <label for="manufacturer">Manufacturer:</label>
+                        <input type="text" id="manufacturer" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="modelNumber">Model Number:</label>
+                        <input type="text" id="modelNumber" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="hardwareType">Hardware Type:</label>
+                        <input type="text" id="hardwareType" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="serialNumber">Serial/Service Tag Number:</label>
+                        <input type="text" id="serialNumber" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="assignedTo">Assigned To:</label>
+                        <input type="text" id="assignedTo">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="room_name">Room Name:</label>
+                        <input type="text" id="room_name">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dateAssigned">Date Assigned:</label>
+                        <input type="date" id="dateAssigned">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dateDecommissioned">Date Decommissioned:</label>
+                        <input type="date" id="dateDecommissioned">
+                    </div>
+                    
+                    <button type="submit">Add Hardware</button>
+                </form>
             </div>
         </div>
 
@@ -88,7 +95,7 @@
                         <th class="sortable" data-sort="type">Type</th>
                         <th class="sortable" data-sort="serial">Serial Number</th>
                         <th class="sortable" data-sort="assigned">Assigned To</th>
-                        <th class="sortable" data-sort="location">Location</th>
+                        <th class="sortable" data-sort="room">Room Name</th>
                         <th class="sortable" data-sort="dateAssigned">Date Assigned</th>
                         <th class="sortable" data-sort="dateDecommissioned">Date Decommissioned</th>
                     </tr>
@@ -113,6 +120,55 @@
             }
         }
 
+        // Excel import functionality
+        const importBtn = document.getElementById('importBtn');
+        const excelFile = document.getElementById('excelFile');
+        const importStatus = document.getElementById('importStatus');
+
+        importBtn.addEventListener('click', () => {
+            excelFile.click();
+        });
+
+        excelFile.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/import', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    importStatus.className = 'success';
+                    importStatus.textContent = result.message;
+                    if (result.errors && result.errors.length > 0) {
+                        importStatus.textContent += '\nErrors:\n' + result.errors.join('\n');
+                    }
+                    loadInventory(); // Refresh the table
+                } else {
+                    importStatus.className = 'error';
+                    importStatus.textContent = result.error || 'Import failed';
+                }
+            } catch (error) {
+                importStatus.className = 'error';
+                importStatus.textContent = 'Error: ' + error.message;
+            }
+
+            importStatus.style.display = 'block';
+            setTimeout(() => {
+                importStatus.style.display = 'none';
+            }, 5000);
+
+            // Reset file input
+            e.target.value = '';
+        });
+
         // Search functionality
         document.getElementById('searchInput').addEventListener('input', function(e) {
             const searchTerm = e.target.value.toLowerCase();
@@ -134,7 +190,7 @@
                 hardware_type: document.getElementById('hardwareType').value,
                 serial_number: document.getElementById('serialNumber').value,
                 assigned_to: document.getElementById('assignedTo').value,
-                location: document.getElementById('location').value,
+                room_name: document.getElementById('room_name').value,
                 date_assigned: document.getElementById('dateAssigned').value || null,
                 date_decommissioned: document.getElementById('dateDecommissioned').value || null
             };
@@ -178,7 +234,7 @@
                         <td>${item.hardware_type}</td>
                         <td>${item.serial_number}</td>
                         <td>${item.assigned_to || ''}</td>
-                        <td>${item.location || ''}</td>
+                        <td>${item.room_name || ''}</td>
                         <td>${item.date_assigned ? new Date(item.date_assigned).toLocaleDateString() : ''}</td>
                         <td>${item.date_decommissioned ? new Date(item.date_decommissioned).toLocaleDateString() : ''}</td>
                     `;
@@ -247,7 +303,7 @@
                 'type': 2,
                 'serial': 3,
                 'assigned': 4,
-                'location': 5,
+                'room': 5,
                 'dateAssigned': 6,
                 'dateDecommissioned': 7
             };
