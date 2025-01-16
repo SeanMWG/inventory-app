@@ -1,35 +1,21 @@
 import os
-from datetime import timedelta
 
-# Azure AD settings
-CLIENT_ID = os.getenv('CLIENT_ID')
-CLIENT_SECRET = os.getenv('CLIENT_SECRET')
-TENANT_ID = os.getenv('TENANT_ID')
+# Role definitions
+ROLES = {
+    'admin': 'Admin',      # Can perform all operations
+    'editor': 'Editor',    # Can add and edit items
+    'viewer': 'Viewer'     # Can only view items
+}
 
-# Azure AD URLs
-AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
-REDIRECT_PATH = "/auth/callback"  # This must match your Azure AD redirect URI
+# Role permissions
+ROLE_PERMISSIONS = {
+    'admin': ['view', 'add', 'edit', 'delete'],
+    'editor': ['view', 'add', 'edit'],
+    'viewer': ['view']
+}
 
-# App URLs
-if os.getenv('WEBSITE_HOSTNAME'):
-    # Running in Azure
-    BASE_URL = f"https://{os.getenv('WEBSITE_HOSTNAME')}"
-else:
-    # Running locally
-    BASE_URL = "http://localhost:5000"
+# Default role for users if no role is assigned
+DEFAULT_ROLE = 'viewer'
 
-REDIRECT_URI = f"{BASE_URL}{REDIRECT_PATH}"
-
-# OAuth settings
-SCOPE = [
-    "User.Read",
-    "User.ReadBasic.All"
-]
-
-# Session settings
-SESSION_TYPE = "filesystem"
-PERMANENT_SESSION_LIFETIME = timedelta(hours=24)
-SECRET_KEY = os.getenv('SECRET_KEY', os.urandom(32))  # For session encryption
-
-# Enable debug logging for MSAL
-LOGGING_LEVEL = 'DEBUG'
+# Database URL (will be provided by environment variable)
+DATABASE_URL = os.getenv('DATABASE_URL')
