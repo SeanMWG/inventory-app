@@ -1,15 +1,17 @@
-from flask import Flask, request, jsonify, send_from_directory, redirect, session, url_for, flash
+from flask import Flask, request, jsonify, send_from_directory, redirect, session, url_for, flash, render_template
 import pandas as pd
 from werkzeug.utils import secure_filename
 import tempfile
 import os
 from flask_cors import CORS
-from datetime import datetime
+from datetime import datetime, timedelta
 import msal
 import requests
 import logging
 import sys
 import pyodbc
+from functools import wraps
+from flask_session import Session
 
 # Configure logging
 logging.basicConfig(
@@ -22,8 +24,14 @@ logging.basicConfig(
 
 app = Flask(__name__)
 app.config.from_object('config')
-app.secret_key = os.urandom(24)  # Required for session management
-CORS(app)
+
+# Session configuration
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+Session(app)
+
+# Configure CORS to work with credentials
+CORS(app, supports_credentials=True)
 
 # Get database connection string
 db_connection = os.getenv('DATABASE_URL', '')
@@ -52,7 +60,7 @@ def _build_msal_app():
     return msal.ConfidentialClientApplication(
         app.config['CLIENT_ID'],
         authority=app.config['AUTHORITY'],
-        client_credential=None  # No client secret needed for public client application
+        client_credential=app.config['CLIENT_SECRET']
     )
 
 def _build_auth_url():
@@ -73,11 +81,11 @@ def _get_token_from_cache(token_cache):
 
 # Authentication decorator
 def login_required(f):
+    @wraps(f)
     def decorated_function(*args, **kwargs):
         if not session.get('user'):
             return redirect(url_for('login'))
         return f(*args, **kwargs)
-    decorated_function.__name__ = f.__name__
     return decorated_function
 
 # Function to get database connection
@@ -94,34 +102,39 @@ def get_db_connection():
 def login():
     if session.get('user'):
         return redirect(url_for('serve_index'))
+    
+    # Get auth URL for Microsoft login
     auth_url = _build_auth_url()
-    return redirect(auth_url)
+    return render_template('login.html', auth_url=auth_url)
 
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('serve_index'))
+    return redirect(url_for('login'))
 
 @app.route(app.config['REDIRECT_PATH'])
 def authorized():
     if request.args.get('error'):
-        return request.args['error']
+        return render_template('login.html', error=request.args['error'])
     
-    cache = _build_msal_app().get_token_by_authorization_code(
-        request.args['code'],
-        scopes=app.config['SCOPE'],
-        redirect_uri=app.config['REDIRECT_URI']
-    )
+    try:
+        cache = _build_msal_app().acquire_token_by_authorization_code(
+            request.args['code'],
+            scopes=app.config['SCOPE'],
+            redirect_uri=app.config['REDIRECT_URI']
+        )
+    except ValueError:  # Usually caused by CSRF
+        return redirect(url_for('login'))
     
     if 'error' in cache:
-        return cache['error']
+        return render_template('login.html', error=cache['error'])
     
     session['user'] = cache.get('id_token_claims')
     return redirect(url_for('serve_index'))
 
 # Protected routes
 @app.route('/api/hardware', methods=['GET'])
-# @login_required  # Temporarily disabled
+@login_required
 def get_hardware():
     try:
         page = request.args.get('page', 1, type=int)
@@ -235,7 +248,7 @@ def get_hardware():
         return jsonify({'error': f'Error fetching hardware: {str(e)}'}), 500
 
 @app.route('/api/hardware', methods=['POST', 'PUT'])
-# @login_required  # Temporarily disabled
+@login_required
 def handle_hardware():
     if request.method == 'POST':
         return add_hardware()
@@ -280,16 +293,18 @@ def add_hardware():
         return jsonify({'error': str(e)}), 400
 
 @app.route('/')
+@login_required
 def serve_index():
     return send_from_directory('.', 'index.html')
 
 @app.route('/<path:path>')
+@login_required
 def serve_static(path):
     return send_from_directory('.', path)
 
 # Excel import route
 @app.route('/api/import', methods=['POST'])
-# @login_required  # Temporarily disabled
+@login_required
 def import_excel():
     logging.info("Starting import process")
     

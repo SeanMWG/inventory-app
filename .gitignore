@@ -1,10 +1,8 @@
-# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
 build/
 develop-eggs/
 dist/
@@ -16,37 +14,24 @@ lib64/
 parts/
 sdist/
 var/
+wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
-# Virtual Environment
+MANIFEST
+.env
+.venv
+env/
 venv/
 ENV/
-
-# Database
-*.db
+env.bak/
+venv.bak/
 instance/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Azure
+.webassets-cache
 .env
-.azure/
-
-# Terraform - exclude everything in terraform directory
-terraform/
-terraform.*
-.terraform/
-.terraform.*
-*.tfstate
-*.tfstate.*
-*.tfvars
-*.tfvars.json
-
-# Logs
-*.log
+*.db
+flask_session/
+.vscode/
+*.pyc
+__pycache__/
+.DS_Store
