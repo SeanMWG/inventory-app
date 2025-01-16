@@ -50,6 +50,12 @@
             color: var(--text-color);
         }
 
+        .button-wrapper {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+        }
+
         .login-button {
             background-color: var(--button-bg);
             color: white;
@@ -58,11 +64,14 @@
             border-radius: 4px;
             cursor: pointer;
             font-size: 16px;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 10px;
-            width: 100%;
+            width: auto;
+            min-width: 220px;
+            max-width: 280px;
+            text-decoration: none;
             transition: background-color 0.2s;
         }
 
@@ -73,6 +82,7 @@
         .microsoft-logo {
             width: 24px;
             height: 24px;
+            flex-shrink: 0;
         }
 
         .error-message {
@@ -87,15 +97,17 @@
 <body>
     <div class="login-container">
         <h1>IT Hardware Inventory</h1>
-        <a href="{{ auth_url }}" class="login-button">
-            <svg class="microsoft-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 23 23">
-                <path fill="#f25022" d="M1 1h10v10H1z"/>
-                <path fill="#00a4ef" d="M1 12h10v10H1z"/>
-                <path fill="#7fba00" d="M12 1h10v10H12z"/>
-                <path fill="#ffb900" d="M12 12h10v10H12z"/>
-            </svg>
-            Sign in with Microsoft
-        </a>
+        <div class="button-wrapper">
+            <a href="{{ auth_url }}" class="login-button">
+                <svg class="microsoft-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 23 23">
+                    <path fill="#f25022" d="M1 1h10v10H1z"/>
+                    <path fill="#00a4ef" d="M1 12h10v10H1z"/>
+                    <path fill="#7fba00" d="M12 1h10v10H12z"/>
+                    <path fill="#ffb900" d="M12 12h10v10H12z"/>
+                </svg>
+                Sign in with Microsoft
+            </a>
+        </div>
         {% if error %}
         <div class="error-message">
             {{ error }}

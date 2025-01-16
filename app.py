@@ -132,13 +132,22 @@ def login():
         return redirect(url_for('serve_index'))
     
     try:
+        # Check if required environment variables are set
+        if not all([app.config['CLIENT_ID'], app.config['CLIENT_SECRET'], app.config['TENANT_ID']]):
+            missing_vars = [var for var in ['CLIENT_ID', 'CLIENT_SECRET', 'TENANT_ID'] 
+                          if not app.config[var]]
+            error_msg = f"Missing required environment variables: {', '.join(missing_vars)}"
+            logging.error(error_msg)
+            return render_template('login.html', error=error_msg)
+
         # Get auth URL for Microsoft login
         auth_url = _build_auth_url()
-        logging.info("Rendering login page")
+        logging.info(f"Auth URL generated successfully: {auth_url[:50]}...")
         return render_template('login.html', auth_url=auth_url)
     except Exception as e:
         logging.error(f"Error in login route: {str(e)}")
-        return render_template('login.html', error="Failed to initialize login. Please try again.")
+        return render_template('login.html', 
+            error=f"Failed to initialize login: {str(e)}")
 
 @app.route('/logout')
 def logout():
