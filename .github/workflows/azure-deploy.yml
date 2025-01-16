@@ -9,7 +9,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 10  # Add timeout to prevent hangs
 
     steps:
     - uses: actions/checkout@v2
@@ -24,27 +24,18 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         
-    - name: Prepare deployment package
+    - name: List files to deploy
       run: |
-        # Create deployment package structure
-        mkdir -p deploy
-        cp -r * deploy/ 2>/dev/null || :
-        rm -rf deploy/.git* deploy/deploy
-        
-        # Create deployment package
-        cd deploy
-        zip -r ../deploy.zip .
-        cd ..
-        
-        echo "Created deployment package:"
-        ls -lh deploy.zip
+        echo "Files to be deployed:"
+        ls -la
 
     - name: Deploy to Azure Web App
+      id: deploy
       uses: azure/webapps-deploy@v2
       with:
         app-name: 'inventory-app-sean'
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        package: deploy.zip
+        package: .
 
     - name: Post-deployment check
       run: |
