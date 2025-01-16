@@ -9,6 +9,7 @@ import logging
 import sys
 import pyodbc
 from functools import wraps
+import json
 
 # Configure logging
 logging.basicConfig(
@@ -49,17 +50,41 @@ if 'ODBC Driver' in db_connection:
 
 def get_user_role():
     """Get the user's role from Azure AD claims"""
-    headers = request.headers
-    roles = headers.get('X-MS-CLIENT-PRINCIPAL-ROLES', '').split(',')
-    
-    # Map Azure AD roles to app roles
-    for role in roles:
-        role = role.lower().strip()
-        if role in app.config['ROLES']:
-            return role
-    
-    # Return default role if no matching role found
-    return app.config['DEFAULT_ROLE']
+    try:
+        # Get the principal header
+        principal = request.headers.get('X-MS-CLIENT-PRINCIPAL', '')
+        if not principal:
+            logging.warning("No principal header found")
+            return app.config['DEFAULT_ROLE']
+
+        # Decode base64 principal
+        import base64
+        principal_json = base64.b64decode(principal).decode('utf-8')
+        principal_data = json.loads(principal_json)
+        
+        # Log the principal data for debugging
+        logging.debug(f"Principal data: {principal_data}")
+        
+        # Extract roles from claims
+        claims = principal_data.get('claims', [])
+        roles = [
+            claim['val'] for claim in claims 
+            if claim['typ'].lower() == 'roles'
+        ]
+        
+        logging.debug(f"Found roles: {roles}")
+        
+        # Map Azure AD roles to app roles
+        for role in roles:
+            role = role.lower()
+            if role in app.config['ROLES']:
+                return role
+        
+        # Return default role if no matching role found
+        return app.config['DEFAULT_ROLE']
+    except Exception as e:
+        logging.error(f"Error getting user role: {str(e)}")
+        return app.config['DEFAULT_ROLE']
 
 def has_permission(required_permission):
     """Check if the current user has the required permission"""
