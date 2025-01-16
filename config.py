@@ -2,9 +2,9 @@ import os
 from datetime import timedelta
 
 # Azure AD settings
-CLIENT_ID = os.getenv('CLIENT_ID', "31eb29e9-2e74-4fdc-8515-d774832276f3")
-CLIENT_SECRET = os.getenv('CLIENT_SECRET', "rJE8Q~Zqviy1Fg-tSKBMJ-eeX13ZY5ahSxftYa28")
-TENANT_ID = os.getenv('TENANT_ID', "ae128315-4515-4382-89e8-094e98d313bc")
+CLIENT_ID = os.getenv('CLIENT_ID')
+CLIENT_SECRET = os.getenv('CLIENT_SECRET')
+TENANT_ID = os.getenv('TENANT_ID')
 
 # Azure AD URLs
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
