@@ -57,27 +57,53 @@ if 'ODBC Driver' in db_connection:
 
 # Initialize MSAL
 def _build_msal_app():
-    return msal.ConfidentialClientApplication(
-        app.config['CLIENT_ID'],
-        authority=app.config['AUTHORITY'],
-        client_credential=app.config['CLIENT_SECRET']
-    )
+    logging.info(f"Building MSAL app with authority: {app.config['AUTHORITY']}")
+    logging.info(f"Redirect URI: {app.config['REDIRECT_URI']}")
+    try:
+        msal_app = msal.ConfidentialClientApplication(
+            app.config['CLIENT_ID'],
+            authority=app.config['AUTHORITY'],
+            client_credential=app.config['CLIENT_SECRET']
+        )
+        logging.info("MSAL app built successfully")
+        return msal_app
+    except Exception as e:
+        logging.error(f"Error building MSAL app: {str(e)}")
+        raise
 
 def _build_auth_url():
-    return _build_msal_app().get_authorization_request_url(
-        app.config['SCOPE'],
-        redirect_uri=app.config['REDIRECT_URI'],
-        state=None
-    )
+    try:
+        msal_app = _build_msal_app()
+        auth_url = msal_app.get_authorization_request_url(
+            app.config['SCOPE'],
+            redirect_uri=app.config['REDIRECT_URI'],
+            state=None
+        )
+        logging.info(f"Generated auth URL: {auth_url}")
+        return auth_url
+    except Exception as e:
+        logging.error(f"Error building auth URL: {str(e)}")
+        raise
 
 def _get_token_from_cache(token_cache):
-    accounts = token_cache.get_accounts()
-    if accounts:
-        return _build_msal_app().acquire_token_silent(
-            app.config['SCOPE'],
-            account=accounts[0]
-        )
-    return None
+    try:
+        accounts = token_cache.get_accounts()
+        if accounts:
+            logging.info(f"Found {len(accounts)} accounts in cache")
+            result = _build_msal_app().acquire_token_silent(
+                app.config['SCOPE'],
+                account=accounts[0]
+            )
+            if result:
+                logging.info("Token retrieved from cache successfully")
+            else:
+                logging.info("No token found in cache")
+            return result
+        logging.info("No accounts found in cache")
+        return None
+    except Exception as e:
+        logging.error(f"Error getting token from cache: {str(e)}")
+        return None
 
 # Authentication decorator
 def login_required(f):
@@ -100,37 +126,69 @@ def get_db_connection():
 # Auth routes
 @app.route('/login')
 def login():
+    logging.info("Login route accessed")
     if session.get('user'):
+        logging.info("User already logged in, redirecting to index")
         return redirect(url_for('serve_index'))
     
-    # Get auth URL for Microsoft login
-    auth_url = _build_auth_url()
-    return render_template('login.html', auth_url=auth_url)
+    try:
+        # Get auth URL for Microsoft login
+        auth_url = _build_auth_url()
+        logging.info("Rendering login page")
+        return render_template('login.html', auth_url=auth_url)
+    except Exception as e:
+        logging.error(f"Error in login route: {str(e)}")
+        return render_template('login.html', error="Failed to initialize login. Please try again.")
 
 @app.route('/logout')
 def logout():
+    logging.info("Logout route accessed")
     session.clear()
     return redirect(url_for('login'))
 
 @app.route(app.config['REDIRECT_PATH'])
 def authorized():
+    logging.info("Auth callback route accessed")
+    
     if request.args.get('error'):
-        return render_template('login.html', error=request.args['error'])
+        error = request.args['error']
+        error_description = request.args.get('error_description', '')
+        logging.error(f"Auth error: {error} - {error_description}")
+        return render_template('login.html', error=f"{error}: {error_description}")
+    
+    if 'code' not in request.args:
+        logging.error("No code in request args")
+        return render_template('login.html', error="No authorization code received")
     
     try:
+        logging.info("Attempting to acquire token")
         cache = _build_msal_app().acquire_token_by_authorization_code(
             request.args['code'],
             scopes=app.config['SCOPE'],
             redirect_uri=app.config['REDIRECT_URI']
         )
-    except ValueError:  # Usually caused by CSRF
-        return redirect(url_for('login'))
-    
-    if 'error' in cache:
-        return render_template('login.html', error=cache['error'])
-    
-    session['user'] = cache.get('id_token_claims')
-    return redirect(url_for('serve_index'))
+        
+        logging.info(f"Token response received: {list(cache.keys()) if cache else 'None'}")
+        
+        if 'error' in cache:
+            logging.error(f"Error in token response: {cache.get('error')}")
+            error_desc = cache.get('error_description', '')
+            return render_template('login.html', error=f"Error getting token: {cache['error']} - {error_desc}")
+        
+        if 'id_token_claims' not in cache:
+            logging.error("No token claims in response")
+            return render_template('login.html', error="No token claims received")
+        
+        session['user'] = cache['id_token_claims']
+        logging.info(f"User authenticated: {session['user'].get('preferred_username')}")
+        return redirect(url_for('serve_index'))
+        
+    except ValueError as ve:
+        logging.error(f"ValueError in auth callback: {str(ve)}")
+        return render_template('login.html', error="Invalid authorization code")
+    except Exception as e:
+        logging.error(f"Unexpected error in auth callback: {str(e)}")
+        return render_template('login.html', error="An unexpected error occurred")
 
 # Protected routes
 @app.route('/api/hardware', methods=['GET'])

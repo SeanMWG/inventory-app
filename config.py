@@ -1,9 +1,10 @@
 import os
+from datetime import timedelta
 
 # Azure AD settings
-CLIENT_ID = "31eb29e9-2e74-4fdc-8515-d774832276f3"  # Replace with your actual client ID
-CLIENT_SECRET = "7955b14a-c78c-4a3b-aaa4-1b8cb01337d9"  # Replace with your actual client secret
-TENANT_ID = "ae128315-4515-4382-89e8-094e98d313bc"  # Replace with your actual tenant ID
+CLIENT_ID = os.getenv('CLIENT_ID', "31eb29e9-2e74-4fdc-8515-d774832276f3")
+CLIENT_SECRET = os.getenv('CLIENT_SECRET', "rJE8Q~Zqviy1Fg-tSKBMJ-eeX13ZY5ahSxftYa28")
+TENANT_ID = os.getenv('TENANT_ID', "ae128315-4515-4382-89e8-094e98d313bc")
 
 # Azure AD URLs
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
@@ -27,4 +28,8 @@ SCOPE = [
 
 # Session settings
 SESSION_TYPE = "filesystem"
-SECRET_KEY = os.urandom(32)  # For session encryption
+PERMANENT_SESSION_LIFETIME = timedelta(hours=24)
+SECRET_KEY = os.getenv('SECRET_KEY', os.urandom(32))  # For session encryption
+
+# Enable debug logging for MSAL
+LOGGING_LEVEL = 'DEBUG'
