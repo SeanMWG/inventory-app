@@ -9,6 +9,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # Add timeout to prevent hangs
 
     steps:
     - uses: actions/checkout@v2
@@ -22,6 +23,11 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        
+    - name: List files to deploy
+      run: |
+        echo "Files to be deployed:"
+        ls -la
 
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
@@ -29,3 +35,8 @@ jobs:
         app-name: 'inventory-app-sean'
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: .
+
+    - name: Post-deployment check
+      run: |
+        echo "Deployment completed"
+        echo "App URL: https://inventory-app-sean.azurewebsites.net"
