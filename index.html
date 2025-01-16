@@ -8,6 +8,10 @@
 </head>
 <body>
     <div class="top-buttons">
+        <div class="user-info">
+            <span id="userName"></span>
+            <a href="/.auth/logout" class="logout-button">Logout</a>
+        </div>
         <button id="themeToggle" class="theme-toggle">
             <span class="icon">🌞</span>
             <span class="text">Light Mode</span>
@@ -20,11 +24,6 @@
         <div class="action-buttons">
             <button id="addHardwareBtn" class="action-button">Add New Hardware</button>
             <button id="toggleFilters" class="filter-button toggle-filters">Show Filters</button>
-            <div class="import-container">
-                <input type="file" id="excelFile" accept=".xlsx" style="display: none;">
-                <button id="importBtn" class="action-button">Import from Excel</button>
-                <div id="importStatus"></div>
-            </div>
         </div>
 
         <!-- Filter Panel -->
@@ -228,6 +227,16 @@
     </div>
 
     <script>
+        // Get user info
+        fetch('/.auth/me')
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.clientPrincipal) {
+                    document.getElementById('userName').textContent = data.clientPrincipal.userDetails;
+                }
+            })
+            .catch(error => console.error('Error fetching user info:', error));
+
         // Modal controls
         const modal = document.getElementById('formModal');
         const detailsModal = document.getElementById('detailsModal');
@@ -309,69 +318,6 @@
             
             modal.style.display = 'block';
         }
-
-        // Excel import functionality
-        const importBtn = document.getElementById('importBtn');
-        const excelFile = document.getElementById('excelFile');
-        const importStatus = document.getElementById('importStatus');
-
-        importBtn.addEventListener('click', () => {
-            excelFile.click();
-        });
-
-        excelFile.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const formData = new FormData();
-            formData.append('file', file);
-
-            try {
-                const response = await fetch('/api/import', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                let result;
-                try {
-                    const text = await response.text();
-                    result = text ? JSON.parse(text) : {};
-                } catch (e) {
-                    console.error('Error parsing response:', e, 'Response text:', text);
-                    throw new Error('Invalid server response');
-                }
-                
-                if (response.ok) {
-                    importStatus.className = 'success';
-                    importStatus.textContent = result.message;
-                    if (result.errors && result.errors.length > 0) {
-                        importStatus.textContent += '\nErrors:\n' + result.errors.join('\n');
-                    }
-                    loadInventory();
-                } else {
-                    importStatus.className = 'error';
-                    const errorMessage = result.error || 'Import failed';
-                    importStatus.innerHTML = `Error: ${errorMessage}<br>Please check:<br>1. File is .xlsx format<br>2. Required columns are present<br>3. Column names match exactly`;
-                }
-            } catch (error) {
-                importStatus.className = 'error';
-                importStatus.textContent = 'Error: ' + (error.message || 'Failed to process file');
-                console.error('Import error:', error);
-            }
-
-            importStatus.style.display = 'block';
-            if (importStatus.className === 'error') {
-                setTimeout(() => {
-                    importStatus.style.display = 'none';
-                }, 15000);
-            } else {
-                setTimeout(() => {
-                    importStatus.style.display = 'none';
-                }, 5000);
-            }
-
-            e.target.value = '';
-        });
 
         // Search functionality
         document.getElementById('searchInput').addEventListener('input', function(e) {
