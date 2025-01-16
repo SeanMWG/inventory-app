@@ -9,7 +9,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 10  # Add timeout to prevent hangs
+    timeout-minutes: 20  # Increased timeout
 
     steps:
     - uses: actions/checkout@v2
@@ -28,6 +28,19 @@ jobs:
       run: |
         echo "Files to be deployed:"
         ls -la
+        echo "Current directory: $PWD"
+        echo "Directory contents:"
+        find . -type f -not -path '*/\.*'
+
+    - name: Create deployment package
+      run: |
+        echo "Creating deployment package..."
+        rm -rf node_modules || true
+        rm -rf __pycache__ || true
+        rm -rf .pytest_cache || true
+        zip -r deploy.zip . -x "*.git*" "*.pyc" "__pycache__/*"
+        echo "Package contents:"
+        unzip -l deploy.zip
 
     - name: Deploy to Azure Web App
       id: deploy
@@ -35,9 +48,13 @@ jobs:
       with:
         app-name: 'inventory-app-sean'
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        package: .
+        package: deploy.zip
 
-    - name: Post-deployment check
+    - name: Check deployment status
+      if: always()
       run: |
+        echo "Deployment step status: ${{ steps.deploy.outcome }}"
+        echo "Checking app status..."
+        curl -I https://inventory-app-sean.azurewebsites.net || true
         echo "Deployment completed"
         echo "App URL: https://inventory-app-sean.azurewebsites.net"
