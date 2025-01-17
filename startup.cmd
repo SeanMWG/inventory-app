@@ -13,4 +13,4 @@ del msodbcsql.msi
 echo ODBC Driver installation complete.
 
 REM Start the Python app using the Azure Web App's Python
-D:\home\python311\python.exe -m flask run --host=0.0.0.0 --port=8000
+D:\Python311\python.exe -m flask run --host=0.0.0.0 --port=8000

@@ -9,7 +9,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # Increased timeout
+    timeout-minutes: 30
 
     steps:
     - uses: actions/checkout@v2
@@ -45,22 +45,10 @@ jobs:
     - name: Deploy to Azure Web App
       id: deploy
       uses: azure/webapps-deploy@v2
-      continue-on-error: true  # Allow the step to continue even if there's an error
       with:
         app-name: 'inventory-app-sean'
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: deploy.zip
-
-    - name: Azure Login
-      uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-    - name: Configure App Settings
-      uses: azure/CLI@v1
-      with:
-        inlineScript: |
-          az webapp config appsettings set --name inventory-app-sean --resource-group MWG-AZ-TF --settings DATABASE_URL="${{ secrets.DATABASE_URL }}" SCM_DO_BUILD_DURING_DEPLOYMENT=true
 
     - name: Check deployment status
       if: steps.deploy.outcome == 'success' || steps.deploy.outcome == 'failure'
@@ -68,14 +56,6 @@ jobs:
         if [ "${{ steps.deploy.outcome }}" == "success" ]; then
           echo "Deployment completed successfully"
         else
-          # Even if deployment shows as failed, check if the app is actually running
-          echo "Deployment step reported failure, checking app status..."
-          response=$(curl -s -o /dev/null -w "%{http_code}" https://inventory-app-sean.azurewebsites.net)
-          if [ "$response" == "200" ] || [ "$response" == "302" ]; then
-            echo "App is responding with status code $response, marking as success"
-            exit 0
-          else
-            echo "App is not responding correctly (status code $response)"
-            exit 1
-          fi
+          echo "Deployment step reported failure"
+          exit 1
         fi

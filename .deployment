@@ -1,3 +1,2 @@
 [config]
-SCM_DO_BUILD_DURING_DEPLOYMENT=true
-POST_BUILD_SCRIPT=install.cmd
+command = startup.cmd
