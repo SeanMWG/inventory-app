@@ -48,29 +48,90 @@ def get_hardware():
     """Get hardware items with better error handling"""
     try:
         logging.info("GET /api/hardware request received")
+        page = request.args.get('page', 1, type=int)
+        per_page = 35
         
-        # Test database connection first
-        logging.info("Testing database connection...")
+        # Get filter parameters
+        filters = {
+            'site_name': request.args.get('site_name'),
+            'room_number': request.args.get('room_number'),
+            'room_name': request.args.get('room_name'),
+            'asset_tag': request.args.get('asset_tag'),
+            'asset_type': request.args.get('asset_type'),
+            'model': request.args.get('model'),
+            'serial_number': request.args.get('serial_number'),
+            'notes': request.args.get('notes'),
+            'assigned_to': request.args.get('assigned_to'),
+            'date_assigned_from': request.args.get('date_assigned_from'),
+            'date_assigned_to': request.args.get('date_assigned_to'),
+            'date_decommissioned_from': request.args.get('date_decommissioned_from'),
+            'date_decommissioned_to': request.args.get('date_decommissioned_to')
+        }
+        
+        logging.info(f"Fetching hardware items from database (page {page})")
+        # Connect to database and execute queries
         with get_db_connection() as conn:
             cursor = conn.cursor()
             
-            # Simple test query
-            cursor.execute("SELECT TOP 1 * FROM dbo.Formatted_Company_Inventory")
-            test_row = cursor.fetchone()
-            logging.info(f"Test query successful: {bool(test_row)}")
+            # Build WHERE clause based on filters
+            where_clauses = []
+            params = []
             
-            # If test successful, proceed with actual query
-            query = """
-            SELECT TOP 35 [id], [site_name], [room_number], [room_name], [asset_tag], 
-                   [asset_type], [model], [serial_number], [notes], [assigned_to], 
-                   [date_assigned], [date_decommissioned]
+            for field in ['site_name', 'room_number', 'room_name', 'asset_tag', 
+                         'asset_type', 'model', 'serial_number', 'notes', 'assigned_to']:
+                if filters[field]:
+                    where_clauses.append(f"{field} LIKE ?")
+                    params.append(f"%{filters[field]}%")
+            
+            if filters['date_assigned_from']:
+                where_clauses.append("date_assigned >= ?")
+                params.append(filters['date_assigned_from'])
+            
+            if filters['date_assigned_to']:
+                where_clauses.append("date_assigned <= ?")
+                params.append(filters['date_assigned_to'])
+            
+            if filters['date_decommissioned_from']:
+                where_clauses.append("date_decommissioned >= ?")
+                params.append(filters['date_decommissioned_from'])
+            
+            if filters['date_decommissioned_to']:
+                where_clauses.append("date_decommissioned <= ?")
+                params.append(filters['date_decommissioned_to'])
+            
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+            
+            # Get total count with filters
+            count_sql = f"SELECT COUNT(*) FROM dbo.Formatted_Company_Inventory WHERE {where_sql}"
+            cursor.execute(count_sql, params)
+            total_items = cursor.fetchval()
+            logging.info(f"Total items: {total_items}")
+            
+            # Calculate pagination
+            total_pages = (total_items + per_page - 1) // per_page
+            
+            # Get items for current page
+            offset = (page - 1) * per_page
+            query = f"""
+            SELECT [site_name], [room_number], [room_name], [asset_tag], [asset_type],
+                   [model], [serial_number], [notes], [assigned_to], [date_assigned], [date_decommissioned]
             FROM [dbo].[Formatted_Company_Inventory]
+            WHERE {where_sql}
             ORDER BY [site_name], [room_number]
+            OFFSET ? ROWS
+            FETCH NEXT ? ROWS ONLY;
             """
             
-            cursor.execute(query)
+            # Add pagination parameters
+            query_params = params + [offset, per_page]
+            
+            logging.info(f"Executing query for page {page} (offset {offset})...")
+            cursor.execute(query, query_params)
+            
+            # Get column names and fetch rows
             columns = [column[0] for column in cursor.description]
             rows = cursor.fetchall()
+            logging.info(f"Retrieved {len(rows)} rows")
             
             # Convert to list of dictionaries
             items = []
@@ -82,11 +143,12 @@ def get_hardware():
             
             result = {
                 'items': items,
-                'total_pages': 1,
-                'current_page': 1,
-                'total_items': len(items)
+                'total_pages': total_pages,
+                'current_page': page,
+                'total_items': total_items
             }
             
+            logging.info("Successfully serialized items")
             return jsonify(result)
             
     except Exception as e:
