@@ -5,43 +5,83 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IT Hardware Inventory</title>
     <link rel="stylesheet" href="static/styles.css">
-    <!-- AG Grid Enterprise -->
-    <script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise/dist/ag-grid-enterprise.min.js"></script>
     <!-- AG Grid Styles -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css">
+    <link href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-grid.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-theme-alpine.css" rel="stylesheet">
+    <!-- AG Grid Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/dist/ag-grid-community.min.js"></script>
 </head>
 <body>
-    <!-- Previous HTML content remains the same until the script section -->
+    <div class="top-buttons">
+        <div class="user-info">
+            <span id="userName">Loading...</span>
+            <span id="userRole" class="user-role"></span>
+            <a href="/.auth/logout?post_logout_redirect_uri=/" class="logout-button">Logout</a>
+        </div>
+        <button id="themeToggle" class="theme-toggle">
+            <span class="icon">🌞</span>
+            <span class="text">Light Mode</span>
+        </button>
+    </div>
+    <div class="container">
+        <h1>IT Hardware Inventory</h1>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button id="addHardwareBtn" class="action-button" style="display: none;">Add New Hardware</button>
+            <button id="toggleFilters" class="filter-button toggle-filters">Show Filters</button>
+            <button id="saveLayout" class="action-button">Save Layout</button>
+            <button id="resetLayout" class="action-button">Reset Layout</button>
+        </div>
+
+        <!-- Filter Panel -->
+        <div id="filterPanel" class="filter-panel">
+            <!-- Filter panel content remains the same -->
+        </div>
+
+        <!-- Search Field -->
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="Search inventory...">
+        </div>
+
+        <!-- AG Grid -->
+        <div id="myGrid" class="ag-theme-alpine" style="height: 600px; width: 100%;"></div>
+
+        <!-- Add/Edit Modal Form -->
+        <div id="formModal" class="modal">
+            <!-- Modal content remains the same -->
+        </div>
+
+        <!-- Details Modal -->
+        <div id="detailsModal" class="details-modal">
+            <!-- Details modal content remains the same -->
+        </div>
+    </div>
 
     <script>
-        // Set up AG Grid Enterprise license
-        agGrid.LicenseManager.setLicenseKey("For_Trialing_ag-Grid_Only-Not_For_Real_Development_Or_Production_Projects-Valid_Until-15_August_2024_[v2]_MTcwODA4NzYwMDAwMA==");
-
         let userPermissions = [];
         let gridApi;
         let columnApi;
 
         // Column Definitions
         const columnDefs = [
-            { field: 'site_name', headerName: 'Site Name', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
-            { field: 'room_name', headerName: 'Room Name', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
-            { field: 'room_number', headerName: 'Room Number', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
-            { field: 'asset_tag', headerName: 'Asset Tag', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
-            { field: 'asset_type', headerName: 'Asset Type', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
-            { field: 'model', headerName: 'Model', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
-            { field: 'serial_number', headerName: 'Serial Number', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
-            { field: 'notes', headerName: 'Notes', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
-            { field: 'assigned_to', headerName: 'Assigned To', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
-            { field: 'date_assigned', headerName: 'Date Assigned', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
-            { field: 'date_decommissioned', headerName: 'Date Decommissioned', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
+            { field: 'site_name', headerName: 'Site Name', sortable: true, filter: true },
+            { field: 'room_name', headerName: 'Room Name', sortable: true, filter: true },
+            { field: 'room_number', headerName: 'Room Number', sortable: true, filter: true },
+            { field: 'asset_tag', headerName: 'Asset Tag', sortable: true, filter: true },
+            { field: 'asset_type', headerName: 'Asset Type', sortable: true, filter: true },
+            { field: 'model', headerName: 'Model', sortable: true, filter: true },
+            { field: 'serial_number', headerName: 'Serial Number', sortable: true, filter: true },
+            { field: 'notes', headerName: 'Notes', sortable: true, filter: true },
+            { field: 'assigned_to', headerName: 'Assigned To', sortable: true, filter: true },
+            { field: 'date_assigned', headerName: 'Date Assigned', sortable: true, filter: true },
+            { field: 'date_decommissioned', headerName: 'Date Decommissioned', sortable: true, filter: true },
             {
                 headerName: 'Actions',
                 field: 'actions',
                 sortable: false,
                 filter: false,
                 pinned: 'right',
-                lockPosition: true,
                 cellRenderer: (params) => {
                     const editBtn = document.createElement('button');
                     editBtn.innerHTML = 'Edit';
@@ -52,82 +92,50 @@
             }
         ];
 
-        // Grid Options
-        const gridOptions = {
-            columnDefs: columnDefs,
-            defaultColDef: {
-                flex: 1,
-                minWidth: 100,
-                resizable: true,
-                sortable: true,
-                filter: true,
-                floatingFilter: true,
-                menuTabs: ['generalMenuTab', 'filterMenuTab', 'columnsMenuTab'],
-                enableValue: true,
-                enableRowGroup: true,
-                enablePivot: true
-            },
-            sideBar: {
-                toolPanels: [
-                    {
-                        id: 'columns',
-                        labelDefault: 'Columns',
-                        labelKey: 'columns',
-                        iconKey: 'columns',
-                        toolPanel: 'agColumnsToolPanel',
-                    }
-                ],
-                defaultToolPanel: 'columns'
-            },
-            rowData: [],
-            enableRangeSelection: true,
-            enableColumnMove: true,
-            suppressRowClickSelection: true,
-            rowSelection: 'single',
-            onGridReady: (params) => {
-                gridApi = params.api;
-                columnApi = params.columnApi;
-                
-                // Load saved column state
-                const savedState = localStorage.getItem('gridState');
-                if (savedState) {
-                    columnApi.applyColumnState(JSON.parse(savedState), true);
-                }
-                
-                // Initial data load
-                loadInventory(1);
-            },
-            onRowClicked: (params) => showDetails(params.data),
-            getRowHeight: () => 40,
-            // Save column state on changes
-            onColumnMoved: (params) => {
-                const state = columnApi.getColumnState();
-                localStorage.setItem('gridState', JSON.stringify(state));
-            },
-            onColumnVisible: (params) => {
-                const state = columnApi.getColumnState();
-                localStorage.setItem('gridState', JSON.stringify(state));
-            },
-            onColumnResized: (params) => {
-                const state = columnApi.getColumnState();
-                localStorage.setItem('gridState', JSON.stringify(state));
-            },
-            // Enterprise features
-            enableCharts: true,
-            enableRangeSelection: true,
-            statusBar: {
-                statusPanels: [
-                    { statusPanel: 'agTotalRowCountComponent', align: 'left' },
-                    { statusPanel: 'agFilteredRowCountComponent' },
-                    { statusPanel: 'agSelectedRowCountComponent' },
-                    { statusPanel: 'agAggregationComponent' }
-                ]
-            }
-        };
-
         // Initialize Grid
-        const gridDiv = document.querySelector('#myGrid');
-        new agGrid.Grid(gridDiv, gridOptions);
+        document.addEventListener('DOMContentLoaded', () => {
+            const gridDiv = document.querySelector('#myGrid');
+            const gridOptions = {
+                columnDefs: columnDefs,
+                defaultColDef: {
+                    flex: 1,
+                    minWidth: 100,
+                    resizable: true,
+                    sortable: true,
+                    filter: true,
+                    menuTabs: ['filterMenuTab', 'columnsMenuTab']
+                },
+                rowData: [],
+                suppressRowClickSelection: true,
+                rowSelection: 'single',
+                onGridReady: (params) => {
+                    gridApi = params.api;
+                    columnApi = params.columnApi;
+                    
+                    // Load saved column state
+                    const savedState = localStorage.getItem('gridState');
+                    if (savedState) {
+                        columnApi.applyColumnState(JSON.parse(savedState));
+                    }
+                    
+                    // Initial data load
+                    loadInventory(1);
+                },
+                onRowClicked: (params) => showDetails(params.data),
+                getRowHeight: () => 40,
+                // Column state events
+                onColumnMoved: (event) => {
+                    const state = event.columnApi.getColumnState();
+                    localStorage.setItem('gridState', JSON.stringify(state));
+                },
+                onColumnVisible: (event) => {
+                    const state = event.columnApi.getColumnState();
+                    localStorage.setItem('gridState', JSON.stringify(state));
+                }
+            };
+
+            new agGrid.Grid(gridDiv, gridOptions);
+        });
 
         // Save Layout Button
         document.getElementById('saveLayout').addEventListener('click', () => {
