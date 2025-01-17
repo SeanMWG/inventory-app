@@ -30,16 +30,57 @@ CORS(app, supports_credentials=True)
 # Get database connection string
 db_connection = os.getenv('DATABASE_URL', '')
 logging.info(f"Database URL exists: {bool(db_connection)}")
+if not db_connection:
+    logging.error("DATABASE_URL environment variable is not set!")
 
 def get_db_connection():
     """Get database connection with better error handling"""
     try:
         logging.info("Attempting database connection")
-        return pyodbc.connect(db_connection)
+        if not db_connection:
+            raise Exception("DATABASE_URL environment variable is not set")
+        
+        # Log connection string (without password)
+        safe_connection = db_connection.replace(';', '\n').split('\n')
+        logging.info("Connection details:")
+        for part in safe_connection:
+            if not part.lower().startswith('pwd=') and not part.lower().startswith('password='):
+                logging.info(f"  {part}")
+        
+        conn = pyodbc.connect(db_connection)
+        logging.info("Database connection successful")
+        return conn
+    except pyodbc.Error as e:
+        logging.error(f"PyODBC Error: {str(e)}")
+        logging.error(f"Connection string (sanitized): {';'.join([p for p in safe_connection if not p.lower().startswith('pwd=') and not p.lower().startswith('password=')])}")
+        logging.error(traceback.format_exc())
+        raise
     except Exception as e:
         logging.error(f"Database connection failed: {str(e)}")
         logging.error(traceback.format_exc())
         raise
+
+@app.route('/api/test-db')
+def test_db():
+    """Test database connection"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM dbo.Formatted_Company_Inventory")
+            count = cursor.fetchval()
+            return jsonify({
+                'status': 'success',
+                'message': 'Database connection successful',
+                'total_records': count
+            })
+    except Exception as e:
+        logging.error(f"Database test failed: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'trace': traceback.format_exc()
+        }), 500
 
 def get_user_role():
     """Get user role from Azure AD claims"""
@@ -221,7 +262,7 @@ def get_hardware():
             # Get items for current page
             offset = (page - 1) * per_page
             query = f"""
-            SELECT [id], [site_name], [room_number], [room_name], [asset_tag], [asset_type],
+            SELECT [asset_tag], [site_name], [room_number], [room_name], [asset_type],
                    [model], [serial_number], [notes], [assigned_to], [date_assigned], [date_decommissioned]
             FROM [dbo].[Formatted_Company_Inventory]
             WHERE {where_sql}
@@ -233,7 +274,9 @@ def get_hardware():
             # Add pagination parameters
             query_params = params + [offset, per_page]
             
-            logging.info(f"Executing query for page {page} (offset {offset})...")
+            logging.debug(f"Query SQL: {query}")
+            logging.debug(f"Query params: {query_params}")
+            
             cursor.execute(query, query_params)
             
             # Get column names and fetch rows
@@ -246,6 +289,9 @@ def get_hardware():
             for row in rows:
                 item = {}
                 for i, value in enumerate(row):
+                    # Convert datetime objects to ISO format strings
+                    if isinstance(value, datetime):
+                        value = value.isoformat()
                     item[columns[i].lower()] = value
                 items.append(item)
             
@@ -253,8 +299,7 @@ def get_hardware():
                 'items': items,
                 'total_pages': total_pages,
                 'current_page': page,
-                'total_items': total_items,
-                'user_role': get_user_role()  # Include user role in response
+                'total_items': total_items
             }
             
             logging.info("Successfully serialized items")
@@ -308,9 +353,9 @@ def add_hardware():
         logging.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 400
 
-@app.route('/api/hardware/<int:id>', methods=['PUT'])
+@app.route('/api/hardware/<asset_tag>', methods=['PUT'])
 @role_required('edit')
-def update_hardware(id):
+def update_hardware(asset_tag):
     try:
         data = request.json
         
@@ -324,7 +369,6 @@ def update_hardware(id):
             SET site_name = ?,
                 room_number = ?,
                 room_name = ?,
-                asset_tag = ?,
                 asset_type = ?,
                 model = ?,
                 serial_number = ?,
@@ -332,14 +376,13 @@ def update_hardware(id):
                 assigned_to = ?,
                 date_assigned = ?,
                 date_decommissioned = ?
-            WHERE id = ?;
+            WHERE asset_tag = ?;
             """
             
             cursor.execute(query, (
                 data['site_name'],
                 data['room_number'],
                 data['room_name'],
-                data['asset_tag'],
                 data['asset_type'],
                 data['model'],
                 data['serial_number'],
@@ -347,7 +390,7 @@ def update_hardware(id):
                 data.get('assigned_to'),
                 data.get('date_assigned'),
                 data.get('date_decommissioned'),
-                id
+                asset_tag
             ))
             
             if cursor.rowcount == 0:
