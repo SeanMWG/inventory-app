@@ -309,7 +309,10 @@
                     const editBtn = document.createElement('button');
                     editBtn.innerHTML = 'Edit';
                     editBtn.classList.add('edit-button');
-                    editBtn.addEventListener('click', () => editHardware(params.data));
+                    editBtn.addEventListener('click', (event) => {
+                        event.stopPropagation(); // Stop event from bubbling up to row
+                        editHardware(params.data);
+                    });
                     return editBtn;
                 }
             }
@@ -422,8 +425,10 @@
                 return;
             }
 
+            // Close details modal if it's open
+            document.getElementById('detailsModal').style.display = 'none';
+
             // Fill form with item data
-            document.getElementById('hardwareId').value = item.id;
             document.getElementById('siteName').value = item.site_name;
             document.getElementById('roomNumber').value = item.room_number;
             document.getElementById('roomName').value = item.room_name;
@@ -522,7 +527,7 @@
             document.getElementById('hardwareForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
-                const isEdit = document.getElementById('hardwareId').value !== '';
+                const isEdit = document.getElementById('assetTag').value !== '';
                 if (isEdit && !userPermissions.includes('edit')) {
                     alert('You do not have permission to edit items');
                     return;
@@ -551,8 +556,7 @@
                     let method = 'POST';
 
                     if (isEdit) {
-                        const id = document.getElementById('hardwareId').value;
-                        url = `/api/hardware/${id}`;
+                        url = `/api/hardware/${formData.asset_tag}`;
                         method = 'PUT';
                     }
 
@@ -636,7 +640,6 @@
 
             // Add Hardware Button
             document.getElementById('addHardwareBtn').addEventListener('click', () => {
-                document.getElementById('hardwareId').value = '';
                 document.getElementById('hardwareForm').reset();
                 document.getElementById('modalTitle').textContent = 'Add New Hardware';
                 document.getElementById('submitButton').textContent = 'Add Hardware';
