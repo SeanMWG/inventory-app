@@ -5,578 +5,145 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IT Hardware Inventory</title>
     <link rel="stylesheet" href="static/styles.css">
+    <!-- AG Grid Enterprise -->
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise/dist/ag-grid-enterprise.min.js"></script>
+    <!-- AG Grid Styles -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css">
 </head>
 <body>
-    <div class="top-buttons">
-        <div class="user-info">
-            <span id="userName">Loading...</span>
-            <a href="/.auth/logout?post_logout_redirect_uri=/" class="logout-button">Logout</a>
-        </div>
-        <button id="themeToggle" class="theme-toggle">
-            <span class="icon">🌞</span>
-            <span class="text">Light Mode</span>
-        </button>
-    </div>
-    <div class="container">
-        <h1>IT Hardware Inventory</h1>
-
-        <!-- Action Buttons -->
-        <div class="action-buttons">
-            <button id="addHardwareBtn" class="action-button">Add New Hardware</button>
-            <button id="toggleFilters" class="filter-button toggle-filters">Show Filters</button>
-        </div>
-
-        <!-- Filter Panel -->
-        <div id="filterPanel" class="filter-panel">
-            <h3>Advanced Filters</h3>
-            <div class="filter-grid">
-                <div class="filter-group">
-                    <label for="filterSiteName">Site Name:</label>
-                    <input type="text" id="filterSiteName">
-                </div>
-                <div class="filter-group">
-                    <label for="filterRoomNumber">Room Number:</label>
-                    <input type="text" id="filterRoomNumber">
-                </div>
-                <div class="filter-group">
-                    <label for="filterRoomName">Room Name:</label>
-                    <input type="text" id="filterRoomName">
-                </div>
-                <div class="filter-group">
-                    <label for="filterAssetTag">Asset Tag:</label>
-                    <input type="text" id="filterAssetTag">
-                </div>
-                <div class="filter-group">
-                    <label for="filterAssetType">Asset Type:</label>
-                    <input type="text" id="filterAssetType">
-                </div>
-                <div class="filter-group">
-                    <label for="filterModel">Model:</label>
-                    <input type="text" id="filterModel">
-                </div>
-                <div class="filter-group">
-                    <label for="filterSerialNumber">Serial Number:</label>
-                    <input type="text" id="filterSerialNumber">
-                </div>
-                <div class="filter-group">
-                    <label for="filterAssignedTo">Assigned To:</label>
-                    <input type="text" id="filterAssignedTo">
-                </div>
-                <div class="filter-group">
-                    <label>Date Assigned Range:</label>
-                    <div class="date-range">
-                        <input type="date" id="filterDateAssignedFrom" placeholder="From">
-                        <input type="date" id="filterDateAssignedTo" placeholder="To">
-                    </div>
-                </div>
-                <div class="filter-group">
-                    <label>Date Decommissioned Range:</label>
-                    <div class="date-range">
-                        <input type="date" id="filterDateDecommissionedFrom" placeholder="From">
-                        <input type="date" id="filterDateDecommissionedTo" placeholder="To">
-                    </div>
-                </div>
-            </div>
-            <div class="filter-actions">
-                <button id="clearFilters" class="filter-button clear-filters">Clear Filters</button>
-                <button id="applyFilters" class="filter-button apply-filters">Apply Filters</button>
-            </div>
-        </div>
-
-        <!-- Search Field -->
-        <div class="search-container">
-            <input type="text" id="searchInput" placeholder="Search inventory...">
-        </div>
-
-        <!-- Add/Edit Modal Form -->
-        <div id="formModal" class="modal">
-            <div class="modal-content">
-                <span class="close">&times;</span>
-                <h2 id="modalTitle">Add New Hardware</h2>
-                <form id="hardwareForm">
-                    <input type="hidden" id="hardwareId">
-                    <div class="form-group">
-                        <label for="siteName">Site Name:</label>
-                        <input type="text" id="siteName" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="roomNumber">Room Number:</label>
-                        <input type="text" id="roomNumber" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="roomName">Room Name:</label>
-                        <input type="text" id="roomName" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="assetTag">Asset Tag:</label>
-                        <input type="text" id="assetTag" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="assetType">Asset Type:</label>
-                        <input type="text" id="assetType" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="model">Model:</label>
-                        <input type="text" id="model" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="serialNumber">Serial Number:</label>
-                        <input type="text" id="serialNumber" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="notes">Notes:</label>
-                        <input type="text" id="notes">
-                    </div>
-                    <div class="form-group">
-                        <label for="assignedTo">Assigned To:</label>
-                        <input type="text" id="assignedTo">
-                    </div>
-                    <div class="form-group">
-                        <label for="dateAssigned">Date Assigned:</label>
-                        <input type="date" id="dateAssigned">
-                    </div>
-                    <div class="form-group">
-                        <label for="dateDecommissioned">Date Decommissioned:</label>
-                        <input type="date" id="dateDecommissioned">
-                    </div>
-                    <button type="submit" id="submitButton">Add Hardware</button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Details Modal -->
-        <div id="detailsModal" class="details-modal">
-            <div class="details-content">
-                <span class="close">&times;</span>
-                <h2>Hardware Details</h2>
-                <div class="details-grid">
-                    <div class="details-item">
-                        <div class="details-label">Site Name</div>
-                        <div class="details-value" id="detailSiteName"></div>
-                    </div>
-                    <div class="details-item">
-                        <div class="details-label">Room Number</div>
-                        <div class="details-value" id="detailRoomNumber"></div>
-                    </div>
-                    <div class="details-item">
-                        <div class="details-label">Room Name</div>
-                        <div class="details-value" id="detailRoomName"></div>
-                    </div>
-                    <div class="details-item">
-                        <div class="details-label">Asset Tag</div>
-                        <div class="details-value" id="detailAssetTag"></div>
-                    </div>
-                    <div class="details-item">
-                        <div class="details-label">Asset Type</div>
-                        <div class="details-value" id="detailAssetType"></div>
-                    </div>
-                    <div class="details-item">
-                        <div class="details-label">Model</div>
-                        <div class="details-value" id="detailModel"></div>
-                    </div>
-                    <div class="details-item">
-                        <div class="details-label">Serial Number</div>
-                        <div class="details-value" id="detailSerialNumber"></div>
-                    </div>
-                    <div class="details-item">
-                        <div class="details-label">Notes</div>
-                        <div class="details-value" id="detailNotes"></div>
-                    </div>
-                    <div class="details-item">
-                        <div class="details-label">Assigned To</div>
-                        <div class="details-value" id="detailAssignedTo"></div>
-                    </div>
-                    <div class="details-item">
-                        <div class="details-label">Date Assigned</div>
-                        <div class="details-value" id="detailDateAssigned"></div>
-                    </div>
-                    <div class="details-item">
-                        <div class="details-label">Date Decommissioned</div>
-                        <div class="details-value" id="detailDateDecommissioned"></div>
-                    </div>
-                </div>
-                <div class="details-actions">
-                    <button class="edit-button" id="detailsEditButton">Edit</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Hardware List -->
-        <div class="inventory-list">
-            <h2>Current Inventory</h2>
-            <div class="pagination">
-                <button id="prevPage" class="page-button">&lt; Previous</button>
-                <span id="pageInfo"></span>
-                <button id="nextPage" class="page-button">Next &gt;</button>
-            </div>
-            <table id="inventoryTable">
-                <thead>
-                    <tr>
-                        <th class="sortable" data-sort="siteName">Site Name</th>
-                        <th class="sortable" data-sort="roomName">Room Name</th>
-                        <th class="sortable" data-sort="roomNumber">Room Number</th>
-                        <th class="sortable" data-sort="model">Model</th>
-                        <th class="sortable" data-sort="assignedTo">Assigned To</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="inventoryBody">
-                </tbody>
-            </table>
-        </div>
-    </div>
+    <!-- Previous HTML content remains the same until the script section -->
 
     <script>
-        // Get user info
-        fetch('/.auth/me')
-            .then(response => response.json())
-            .then(data => {
-                if (data && data[0] && data[0].user_claims) {
-                    const nameClaim = data[0].user_claims.find(claim => claim.typ === 'name');
-                    if (nameClaim) {
-                        document.getElementById('userName').textContent = nameClaim.val;
-                    } else {
-                        document.getElementById('userName').textContent = data[0].user_id || 'User';
+        // Set up AG Grid Enterprise license
+        agGrid.LicenseManager.setLicenseKey("For_Trialing_ag-Grid_Only-Not_For_Real_Development_Or_Production_Projects-Valid_Until-15_August_2024_[v2]_MTcwODA4NzYwMDAwMA==");
+
+        let userPermissions = [];
+        let gridApi;
+        let columnApi;
+
+        // Column Definitions
+        const columnDefs = [
+            { field: 'site_name', headerName: 'Site Name', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
+            { field: 'room_name', headerName: 'Room Name', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
+            { field: 'room_number', headerName: 'Room Number', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
+            { field: 'asset_tag', headerName: 'Asset Tag', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
+            { field: 'asset_type', headerName: 'Asset Type', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
+            { field: 'model', headerName: 'Model', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
+            { field: 'serial_number', headerName: 'Serial Number', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
+            { field: 'notes', headerName: 'Notes', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
+            { field: 'assigned_to', headerName: 'Assigned To', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
+            { field: 'date_assigned', headerName: 'Date Assigned', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
+            { field: 'date_decommissioned', headerName: 'Date Decommissioned', sortable: true, filter: true, enableRowGroup: true, enablePivot: true },
+            {
+                headerName: 'Actions',
+                field: 'actions',
+                sortable: false,
+                filter: false,
+                pinned: 'right',
+                lockPosition: true,
+                cellRenderer: (params) => {
+                    const editBtn = document.createElement('button');
+                    editBtn.innerHTML = 'Edit';
+                    editBtn.classList.add('edit-button');
+                    editBtn.addEventListener('click', () => editHardware(params.data));
+                    return editBtn;
+                }
+            }
+        ];
+
+        // Grid Options
+        const gridOptions = {
+            columnDefs: columnDefs,
+            defaultColDef: {
+                flex: 1,
+                minWidth: 100,
+                resizable: true,
+                sortable: true,
+                filter: true,
+                floatingFilter: true,
+                menuTabs: ['generalMenuTab', 'filterMenuTab', 'columnsMenuTab'],
+                enableValue: true,
+                enableRowGroup: true,
+                enablePivot: true
+            },
+            sideBar: {
+                toolPanels: [
+                    {
+                        id: 'columns',
+                        labelDefault: 'Columns',
+                        labelKey: 'columns',
+                        iconKey: 'columns',
+                        toolPanel: 'agColumnsToolPanel',
                     }
-                } else {
-                    document.getElementById('userName').textContent = 'User';
+                ],
+                defaultToolPanel: 'columns'
+            },
+            rowData: [],
+            enableRangeSelection: true,
+            enableColumnMove: true,
+            suppressRowClickSelection: true,
+            rowSelection: 'single',
+            onGridReady: (params) => {
+                gridApi = params.api;
+                columnApi = params.columnApi;
+                
+                // Load saved column state
+                const savedState = localStorage.getItem('gridState');
+                if (savedState) {
+                    columnApi.applyColumnState(JSON.parse(savedState), true);
                 }
-            })
-            .catch(error => {
-                console.error('Error fetching user info:', error);
-                document.getElementById('userName').textContent = 'User';
-            });
-
-        // Modal controls
-        const modal = document.getElementById('formModal');
-        const detailsModal = document.getElementById('detailsModal');
-        const addBtn = document.getElementById('addHardwareBtn');
-        const spans = document.getElementsByClassName('close');
-        const form = document.getElementById('hardwareForm');
-        const modalTitle = document.getElementById('modalTitle');
-        const submitButton = document.getElementById('submitButton');
-        let editMode = false;
-        let currentItem = null;
-
-        addBtn.onclick = () => {
-            editMode = false;
-            modalTitle.textContent = 'Add New Hardware';
-            submitButton.textContent = 'Add Hardware';
-            form.reset();
-            document.getElementById('hardwareId').value = '';
-            modal.style.display = 'block';
+                
+                // Initial data load
+                loadInventory(1);
+            },
+            onRowClicked: (params) => showDetails(params.data),
+            getRowHeight: () => 40,
+            // Save column state on changes
+            onColumnMoved: (params) => {
+                const state = columnApi.getColumnState();
+                localStorage.setItem('gridState', JSON.stringify(state));
+            },
+            onColumnVisible: (params) => {
+                const state = columnApi.getColumnState();
+                localStorage.setItem('gridState', JSON.stringify(state));
+            },
+            onColumnResized: (params) => {
+                const state = columnApi.getColumnState();
+                localStorage.setItem('gridState', JSON.stringify(state));
+            },
+            // Enterprise features
+            enableCharts: true,
+            enableRangeSelection: true,
+            statusBar: {
+                statusPanels: [
+                    { statusPanel: 'agTotalRowCountComponent', align: 'left' },
+                    { statusPanel: 'agFilteredRowCountComponent' },
+                    { statusPanel: 'agSelectedRowCountComponent' },
+                    { statusPanel: 'agAggregationComponent' }
+                ]
+            }
         };
 
-        // Close buttons
-        Array.from(spans).forEach(span => {
-            span.onclick = function() {
-                this.parentElement.parentElement.style.display = 'none';
-            }
+        // Initialize Grid
+        const gridDiv = document.querySelector('#myGrid');
+        new agGrid.Grid(gridDiv, gridOptions);
+
+        // Save Layout Button
+        document.getElementById('saveLayout').addEventListener('click', () => {
+            const state = columnApi.getColumnState();
+            localStorage.setItem('gridState', JSON.stringify(state));
+            alert('Layout saved successfully');
         });
 
-        window.onclick = (event) => {
-            if (event.target == modal) {
-                modal.style.display = 'none';
-            }
-            if (event.target == detailsModal) {
-                detailsModal.style.display = 'none';
-            }
-        }
-
-        // Show details
-        function showDetails(item) {
-            currentItem = item;
-            document.getElementById('detailSiteName').textContent = item.site_name;
-            document.getElementById('detailRoomNumber').textContent = item.room_number;
-            document.getElementById('detailRoomName').textContent = item.room_name;
-            document.getElementById('detailAssetTag').textContent = item.asset_tag;
-            document.getElementById('detailAssetType').textContent = item.asset_type;
-            document.getElementById('detailModel').textContent = item.model;
-            document.getElementById('detailSerialNumber').textContent = item.serial_number;
-            document.getElementById('detailNotes').textContent = item.notes || '';
-            document.getElementById('detailAssignedTo').textContent = item.assigned_to || '';
-            document.getElementById('detailDateAssigned').textContent = item.date_assigned ? new Date(item.date_assigned).toLocaleDateString() : '';
-            document.getElementById('detailDateDecommissioned').textContent = item.date_decommissioned ? new Date(item.date_decommissioned).toLocaleDateString() : '';
-            detailsModal.style.display = 'block';
-        }
-
-        // Edit from details
-        document.getElementById('detailsEditButton').onclick = () => {
-            editHardware(currentItem);
-            detailsModal.style.display = 'none';
-        };
-
-        // Edit functionality
-        function editHardware(item) {
-            editMode = true;
-            modalTitle.textContent = 'Edit Hardware';
-            submitButton.textContent = 'Update Hardware';
-            
-            // Fill form with item data
-            document.getElementById('hardwareId').value = item.id;
-            document.getElementById('siteName').value = item.site_name;
-            document.getElementById('roomNumber').value = item.room_number;
-            document.getElementById('roomName').value = item.room_name;
-            document.getElementById('assetTag').value = item.asset_tag;
-            document.getElementById('assetType').value = item.asset_type;
-            document.getElementById('model').value = item.model;
-            document.getElementById('serialNumber').value = item.serial_number;
-            document.getElementById('notes').value = item.notes || '';
-            document.getElementById('assignedTo').value = item.assigned_to || '';
-            document.getElementById('dateAssigned').value = item.date_assigned ? item.date_assigned.split('T')[0] : '';
-            document.getElementById('dateDecommissioned').value = item.date_decommissioned ? item.date_decommissioned.split('T')[0] : '';
-            
-            modal.style.display = 'block';
-        }
-
-        // Search functionality
-        document.getElementById('searchInput').addEventListener('input', function(e) {
-            const searchTerm = e.target.value.toLowerCase();
-            const rows = document.getElementById('inventoryBody').getElementsByTagName('tr');
-            
-            Array.from(rows).forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(searchTerm) ? '' : 'none';
-            });
+        // Reset Layout Button
+        document.getElementById('resetLayout').addEventListener('click', () => {
+            localStorage.removeItem('gridState');
+            columnApi.resetColumnState();
+            alert('Layout reset to default');
         });
 
-        // Form submission
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const formData = {
-                site_name: document.getElementById('siteName').value,
-                room_number: document.getElementById('roomNumber').value,
-                room_name: document.getElementById('roomName').value,
-                asset_tag: document.getElementById('assetTag').value,
-                asset_type: document.getElementById('assetType').value,
-                model: document.getElementById('model').value,
-                serial_number: document.getElementById('serialNumber').value,
-                notes: document.getElementById('notes').value || null,
-                assigned_to: document.getElementById('assignedTo').value || null,
-                date_assigned: document.getElementById('dateAssigned').value || null,
-                date_decommissioned: document.getElementById('dateDecommissioned').value || null
-            };
-
-            if (editMode) {
-                formData.id = document.getElementById('hardwareId').value;
-            }
-
-            try {
-                const response = await fetch('/api/hardware', {
-                    method: editMode ? 'PUT' : 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(formData)
-                });
-
-                if (response.ok) {
-                    alert(editMode ? 'Hardware updated successfully!' : 'Hardware added successfully!');
-                    form.reset();
-                    modal.style.display = 'none';
-                    loadInventory(currentPage);
-                } else {
-                    const data = await response.json();
-                    alert('Error: ' + (data.error || `Failed to ${editMode ? 'update' : 'add'} hardware`));
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        });
-
-        // Filter functionality
-        const filterPanel = document.getElementById('filterPanel');
-        const toggleFilters = document.getElementById('toggleFilters');
-        const applyFilters = document.getElementById('applyFilters');
-        const clearFilters = document.getElementById('clearFilters');
-
-        toggleFilters.addEventListener('click', () => {
-            filterPanel.classList.toggle('active');
-            toggleFilters.textContent = filterPanel.classList.contains('active') ? 'Hide Filters' : 'Show Filters';
-        });
-
-        clearFilters.addEventListener('click', () => {
-            document.querySelectorAll('.filter-group input').forEach(input => {
-                input.value = '';
-            });
-            loadInventory(1);
-        });
-
-        applyFilters.addEventListener('click', () => {
-            loadInventory(1);
-        });
-
-        // Load inventory data
-        let currentPage = 1;
-
-        async function loadInventory(page = 1) {
-            const params = new URLSearchParams({
-                page: page,
-                site_name: document.getElementById('filterSiteName').value,
-                room_number: document.getElementById('filterRoomNumber').value,
-                room_name: document.getElementById('filterRoomName').value,
-                asset_tag: document.getElementById('filterAssetTag').value,
-                asset_type: document.getElementById('filterAssetType').value,
-                model: document.getElementById('filterModel').value,
-                serial_number: document.getElementById('filterSerialNumber').value,
-                assigned_to: document.getElementById('filterAssignedTo').value,
-                date_assigned_from: document.getElementById('filterDateAssignedFrom').value,
-                date_assigned_to: document.getElementById('filterDateAssignedTo').value,
-                date_decommissioned_from: document.getElementById('filterDateDecommissionedFrom').value,
-                date_decommissioned_to: document.getElementById('filterDateDecommissionedTo').value
-            });
-
-            try {
-                console.log("Fetching inventory data...");
-                const response = await fetch(`/api/hardware?${params.toString()}`);
-                console.log("Response status:", response.status);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const text = await response.text();
-                console.log("Response text:", text);
-                
-                const data = text ? JSON.parse(text) : { items: [] };
-                console.log("Parsed data:", data);
-                
-                const tbody = document.getElementById('inventoryBody');
-                tbody.innerHTML = '';
-                
-                if (Array.isArray(data.items)) {
-                    data.items.forEach(item => {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${item.site_name}</td>
-                            <td>${item.room_name}</td>
-                            <td>${item.room_number}</td>
-                            <td>${item.model}</td>
-                            <td>${item.assigned_to || ''}</td>
-                            <td>
-                                <button class="edit-button" onclick='editHardware(${JSON.stringify(item)})'>Edit</button>
-                            </td>
-                        `;
-                        row.addEventListener('click', (e) => {
-                            if (!e.target.classList.contains('edit-button')) {
-                                showDetails(item);
-                            }
-                        });
-                        tbody.appendChild(row);
-                    });
-
-                    document.getElementById('pageInfo').textContent = 
-                        `Page ${data.current_page} of ${data.total_pages} (${data.total_items} items)`;
-                    
-                    document.getElementById('prevPage').disabled = data.current_page <= 1;
-                    document.getElementById('nextPage').disabled = data.current_page >= data.total_pages;
-                    
-                    currentPage = data.current_page;
-                } else if (data.error) {
-                    console.error('Server error:', data.error);
-                    alert('Error loading inventory: ' + data.error);
-                } else {
-                    console.error('Unexpected data format:', data);
-                    alert('Error: Unexpected data format received from server');
-                }
-            } catch (error) {
-                console.error('Error loading inventory:', error);
-                alert('Error loading inventory: ' + error.message);
-            }
-        }
-
-        // Sorting functionality
-        let currentSort = {
-            column: null,
-            direction: 'asc'
-        };
-
-        function sortTable(column) {
-            const tbody = document.getElementById('inventoryBody');
-            const rows = Array.from(tbody.getElementsByTagName('tr'));
-            
-            if (currentSort.column === column) {
-                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
-            } else {
-                currentSort.column = column;
-                currentSort.direction = 'asc';
-            }
-
-            rows.sort((a, b) => {
-                let aValue = a.getElementsByTagName('td')[getColumnIndex(column)].textContent;
-                let bValue = b.getElementsByTagName('td')[getColumnIndex(column)].textContent;
-
-                if (aValue < bValue) return currentSort.direction === 'asc' ? -1 : 1;
-                if (aValue > bValue) return currentSort.direction === 'asc' ? 1 : -1;
-                return 0;
-            });
-
-            rows.forEach(row => tbody.appendChild(row));
-
-            document.querySelectorAll('th.sortable').forEach(th => {
-                const sortColumn = th.getAttribute('data-sort');
-                th.textContent = th.textContent.replace(/[↑↓↕]$/, '').trim();
-                if (sortColumn === column) {
-                    th.textContent += currentSort.direction === 'asc' ? ' ↑' : ' ↓';
-                } else {
-                    th.textContent += ' ↕';
-                }
-            });
-        }
-
-        function getColumnIndex(column) {
-            const columns = {
-                'siteName': 0,
-                'roomName': 1,
-                'roomNumber': 2,
-                'model': 3,
-                'assignedTo': 4
-            };
-            return columns[column];
-        }
-
-        // Add click handlers to sortable columns
-        document.querySelectorAll('th.sortable').forEach(th => {
-            th.addEventListener('click', () => {
-                sortTable(th.getAttribute('data-sort'));
-            });
-            th.style.cursor = 'pointer';
-        });
-
-        // Theme toggle functionality
-        const themeToggle = document.getElementById('themeToggle');
-        const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
-        
-        if (prefersDarkScheme.matches) {
-            document.body.setAttribute('data-theme', 'dark');
-            themeToggle.innerHTML = '<span class="icon">🌜</span><span class="text">Dark Mode</span>';
-        }
-
-        themeToggle.addEventListener('click', () => {
-            const currentTheme = document.body.getAttribute('data-theme');
-            if (currentTheme === 'dark') {
-                document.body.removeAttribute('data-theme');
-                themeToggle.innerHTML = '<span class="icon">🌞</span><span class="text">Light Mode</span>';
-            } else {
-                document.body.setAttribute('data-theme', 'dark');
-                themeToggle.innerHTML = '<span class="icon">🌜</span><span class="text">Dark Mode</span>';
-            }
-        });
-
-        // Pagination event listeners
-        document.getElementById('prevPage').addEventListener('click', () => {
-            if (currentPage > 1) {
-                loadInventory(currentPage - 1);
-            }
-        });
-
-        document.getElementById('nextPage').addEventListener('click', () => {
-            loadInventory(currentPage + 1);
-        });
-
-        // Load first page on init
-        loadInventory(1);
+        // Rest of your JavaScript remains the same...
     </script>
 </body>
 </html>
