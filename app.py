@@ -60,27 +60,33 @@ def get_db_connection():
         logging.error(traceback.format_exc())
         raise
 
-@app.route('/api/test-db')
-def test_db():
-    """Test database connection"""
+def log_audit(cursor, action_type, asset_tag, field_name, old_value, new_value, changed_by, notes=None):
+    """Log an audit entry"""
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM dbo.Formatted_Company_Inventory")
-            count = cursor.fetchval()
-            return jsonify({
-                'status': 'success',
-                'message': 'Database connection successful',
-                'total_records': count
-            })
+        query = """
+        INSERT INTO dbo.Inventory_Audit_Log 
+        (action_type, asset_tag, field_name, old_value, new_value, changed_by, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?);
+        """
+        cursor.execute(query, (action_type, asset_tag, field_name, old_value, new_value, changed_by, notes))
     except Exception as e:
-        logging.error(f"Database test failed: {str(e)}")
+        logging.error(f"Error logging audit: {str(e)}")
         logging.error(traceback.format_exc())
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'trace': traceback.format_exc()
-        }), 500
+        # Don't raise the exception - we don't want audit logging to break the main functionality
+        
+def get_user_name():
+    """Get the current user's name from Azure AD claims"""
+    try:
+        principal = request.headers.get('X-MS-CLIENT-PRINCIPAL', '')
+        if principal:
+            principal_data = json.loads(base64.b64decode(principal).decode('utf-8'))
+            for claim in principal_data.get('claims', []):
+                if claim['typ'] in ['name', 'preferred_username', 'email']:
+                    return claim['val']
+        return 'Unknown User'
+    except Exception as e:
+        logging.error(f"Error getting user name: {str(e)}")
+        return 'Unknown User'
 
 def get_user_role():
     """Get user role from Azure AD claims"""
@@ -318,6 +324,7 @@ def get_hardware():
 def add_hardware():
     try:
         data = request.json
+        user_name = get_user_name()
         
         # Connect to database
         with get_db_connection() as conn:
@@ -331,7 +338,7 @@ def add_hardware():
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """
             
-            cursor.execute(query, (
+            values = (
                 data['site_name'],
                 data['room_number'],
                 data['room_name'],
@@ -343,7 +350,17 @@ def add_hardware():
                 data.get('assigned_to'),
                 data.get('date_assigned'),
                 data.get('date_decommissioned')
-            ))
+            )
+            
+            cursor.execute(query, values)
+            
+            # Log audit entries for each field
+            fields = ['site_name', 'room_number', 'room_name', 'asset_tag', 'asset_type',
+                     'model', 'serial_number', 'notes', 'assigned_to', 'date_assigned', 'date_decommissioned']
+            
+            for field, value in zip(fields, values):
+                if value is not None:  # Only log non-null values
+                    log_audit(cursor, 'INSERT', data['asset_tag'], field, None, value, user_name)
             
             conn.commit()
             return jsonify({'message': 'Hardware added successfully'}), 201
@@ -358,10 +375,23 @@ def add_hardware():
 def update_hardware(asset_tag):
     try:
         data = request.json
+        user_name = get_user_name()
         
         # Connect to database
         with get_db_connection() as conn:
             cursor = conn.cursor()
+            
+            # Get current values for audit logging
+            cursor.execute("""
+                SELECT site_name, room_number, room_name, asset_type, model,
+                       serial_number, notes, assigned_to, date_assigned, date_decommissioned
+                FROM dbo.Formatted_Company_Inventory
+                WHERE asset_tag = ?
+            """, (asset_tag,))
+            
+            current_values = cursor.fetchone()
+            if not current_values:
+                return jsonify({'error': 'Item not found'}), 404
             
             # Update record
             query = """
@@ -379,7 +409,7 @@ def update_hardware(asset_tag):
             WHERE asset_tag = ?;
             """
             
-            cursor.execute(query, (
+            new_values = (
                 data['site_name'],
                 data['room_number'],
                 data['room_name'],
@@ -391,10 +421,23 @@ def update_hardware(asset_tag):
                 data.get('date_assigned'),
                 data.get('date_decommissioned'),
                 asset_tag
-            ))
+            )
+            
+            cursor.execute(query, new_values)
             
             if cursor.rowcount == 0:
                 return jsonify({'error': 'Item not found'}), 404
+            
+            # Log audit entries for changed fields
+            fields = ['site_name', 'room_number', 'room_name', 'asset_type', 'model',
+                     'serial_number', 'notes', 'assigned_to', 'date_assigned', 'date_decommissioned']
+            
+            for i, field in enumerate(fields):
+                if current_values[i] != new_values[i]:
+                    log_audit(cursor, 'UPDATE', asset_tag, field, 
+                             str(current_values[i]) if current_values[i] is not None else None,
+                             str(new_values[i]) if new_values[i] is not None else None,
+                             user_name)
             
             conn.commit()
             return jsonify({'message': 'Hardware updated successfully'}), 200
@@ -403,6 +446,48 @@ def update_hardware(asset_tag):
         logging.error(f"Error updating hardware: {str(e)}")
         logging.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 400
+
+@app.route('/api/audit/<asset_tag>', methods=['GET'])
+@role_required('view')
+def get_audit_log(asset_tag):
+    """Get audit log for a specific asset"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            query = """
+            SELECT action_type, field_name, old_value, new_value, changed_by, changed_at, notes
+            FROM dbo.Inventory_Audit_Log
+            WHERE asset_tag = ?
+            ORDER BY changed_at DESC;
+            """
+            
+            cursor.execute(query, (asset_tag,))
+            
+            # Get column names and fetch rows
+            columns = [column[0] for column in cursor.description]
+            rows = cursor.fetchall()
+            
+            # Convert to list of dictionaries
+            audit_entries = []
+            for row in rows:
+                entry = {}
+                for i, value in enumerate(row):
+                    # Convert datetime objects to ISO format strings
+                    if isinstance(value, datetime):
+                        value = value.isoformat()
+                    entry[columns[i].lower()] = value
+                audit_entries.append(entry)
+            
+            return jsonify(audit_entries)
+            
+    except Exception as e:
+        logging.error(f"Error getting audit log: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'error': f'Database error: {str(e)}',
+            'trace': traceback.format_exc()
+        }), 500
 
 @app.route('/')
 def serve_index():
