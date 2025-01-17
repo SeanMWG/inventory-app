@@ -51,6 +51,26 @@ jobs:
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: deploy.zip
 
+    - name: Configure App Settings
+      uses: azure/appservice-settings@v1
+      with:
+        app-name: 'inventory-app-sean'
+        app-settings-json: |
+          [
+            {
+              "name": "DATABASE_URL",
+              "value": "${{ secrets.DATABASE_URL }}",
+              "slotSetting": false
+            },
+            {
+              "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
+              "value": "true",
+              "slotSetting": false
+            }
+          ]
+        mask-inputs: true
+      id: settings
+
     - name: Check deployment status
       if: steps.deploy.outcome == 'success' || steps.deploy.outcome == 'failure'
       run: |
