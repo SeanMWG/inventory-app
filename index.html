@@ -9,7 +9,7 @@
     <link href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-grid.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-theme-alpine.css" rel="stylesheet">
     <!-- AG Grid Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/dist/ag-grid-community.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@29.3.5/dist/ag-grid-enterprise.min.js"></script>
 </head>
 <body>
     <div class="top-buttons">
@@ -36,7 +36,59 @@
 
         <!-- Filter Panel -->
         <div id="filterPanel" class="filter-panel">
-            <!-- Filter panel content remains the same -->
+            <h3>Advanced Filters</h3>
+            <div class="filter-grid">
+                <div class="filter-group">
+                    <label for="filterSiteName">Site Name:</label>
+                    <input type="text" id="filterSiteName">
+                </div>
+                <div class="filter-group">
+                    <label for="filterRoomNumber">Room Number:</label>
+                    <input type="text" id="filterRoomNumber">
+                </div>
+                <div class="filter-group">
+                    <label for="filterRoomName">Room Name:</label>
+                    <input type="text" id="filterRoomName">
+                </div>
+                <div class="filter-group">
+                    <label for="filterAssetTag">Asset Tag:</label>
+                    <input type="text" id="filterAssetTag">
+                </div>
+                <div class="filter-group">
+                    <label for="filterAssetType">Asset Type:</label>
+                    <input type="text" id="filterAssetType">
+                </div>
+                <div class="filter-group">
+                    <label for="filterModel">Model:</label>
+                    <input type="text" id="filterModel">
+                </div>
+                <div class="filter-group">
+                    <label for="filterSerialNumber">Serial Number:</label>
+                    <input type="text" id="filterSerialNumber">
+                </div>
+                <div class="filter-group">
+                    <label for="filterAssignedTo">Assigned To:</label>
+                    <input type="text" id="filterAssignedTo">
+                </div>
+                <div class="filter-group">
+                    <label>Date Assigned Range:</label>
+                    <div class="date-range">
+                        <input type="date" id="filterDateAssignedFrom" placeholder="From">
+                        <input type="date" id="filterDateAssignedTo" placeholder="To">
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label>Date Decommissioned Range:</label>
+                    <div class="date-range">
+                        <input type="date" id="filterDateDecommissionedFrom" placeholder="From">
+                        <input type="date" id="filterDateDecommissionedTo" placeholder="To">
+                    </div>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button id="clearFilters" class="filter-button clear-filters">Clear Filters</button>
+                <button id="applyFilters" class="filter-button apply-filters">Apply Filters</button>
+            </div>
         </div>
 
         <!-- Search Field -->
@@ -92,6 +144,38 @@
             }
         ];
 
+        // Load inventory data
+        async function loadInventory(page = 1) {
+            const params = new URLSearchParams({
+                page: page,
+                site_name: document.getElementById('filterSiteName')?.value || '',
+                room_number: document.getElementById('filterRoomNumber')?.value || '',
+                room_name: document.getElementById('filterRoomName')?.value || '',
+                asset_tag: document.getElementById('filterAssetTag')?.value || '',
+                asset_type: document.getElementById('filterAssetType')?.value || '',
+                model: document.getElementById('filterModel')?.value || '',
+                serial_number: document.getElementById('filterSerialNumber')?.value || '',
+                assigned_to: document.getElementById('filterAssignedTo')?.value || '',
+                date_assigned_from: document.getElementById('filterDateAssignedFrom')?.value || '',
+                date_assigned_to: document.getElementById('filterDateAssignedTo')?.value || '',
+                date_decommissioned_from: document.getElementById('filterDateDecommissionedFrom')?.value || '',
+                date_decommissioned_to: document.getElementById('filterDateDecommissionedTo')?.value || ''
+            });
+
+            try {
+                const response = await fetch(`/api/hardware?${params.toString()}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                if (Array.isArray(data.items)) {
+                    gridApi.setRowData(data.items);
+                }
+            } catch (error) {
+                console.error('Error loading inventory:', error);
+            }
+        }
+
         // Initialize Grid
         document.addEventListener('DOMContentLoaded', () => {
             const gridDiv = document.querySelector('#myGrid');
@@ -135,6 +219,48 @@
             };
 
             new agGrid.Grid(gridDiv, gridOptions);
+
+            // Filter panel toggle
+            const filterPanel = document.getElementById('filterPanel');
+            const toggleFilters = document.getElementById('toggleFilters');
+            toggleFilters.addEventListener('click', () => {
+                filterPanel.classList.toggle('active');
+                toggleFilters.textContent = filterPanel.classList.contains('active') ? 'Hide Filters' : 'Show Filters';
+            });
+
+            // Apply filters
+            document.getElementById('applyFilters').addEventListener('click', () => {
+                loadInventory(1);
+            });
+
+            // Clear filters
+            document.getElementById('clearFilters').addEventListener('click', () => {
+                document.querySelectorAll('.filter-group input').forEach(input => {
+                    input.value = '';
+                });
+                loadInventory(1);
+            });
+
+            // Load user info
+            Promise.all([
+                fetch('/.auth/me').then(response => response.json()),
+                fetch('/api/user/role').then(response => response.json())
+            ]).then(([authData, roleData]) => {
+                if (authData && authData[0] && authData[0].user_claims) {
+                    const nameClaim = authData[0].user_claims.find(claim => claim.typ === 'name');
+                    document.getElementById('userName').textContent = nameClaim ? nameClaim.val : 'User';
+                }
+                if (roleData && roleData.role) {
+                    document.getElementById('userRole').textContent = roleData.role.charAt(0).toUpperCase() + roleData.role.slice(1);
+                    userPermissions = roleData.permissions || [];
+                    if (userPermissions.includes('add')) {
+                        document.getElementById('addHardwareBtn').style.display = 'block';
+                    }
+                }
+            }).catch(error => {
+                console.error('Error fetching user info:', error);
+                document.getElementById('userName').textContent = 'User';
+            });
         });
 
         // Save Layout Button
@@ -151,7 +277,10 @@
             alert('Layout reset to default');
         });
 
-        // Rest of your JavaScript remains the same...
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            gridApi.setQuickFilter(e.target.value);
+        });
     </script>
 </body>
 </html>
