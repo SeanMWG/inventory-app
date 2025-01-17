@@ -5,12 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IT Hardware Inventory</title>
     <link rel="stylesheet" href="static/styles.css">
-    <!-- AG Grid Styles -->
+    <!-- AG Grid Community Edition -->
     <link href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-grid.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-theme-alpine.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-theme-alpine-dark.css" rel="stylesheet">
-    <!-- AG Grid Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/ag-grid-enterprise@29.3.5/dist/ag-grid-enterprise.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/dist/ag-grid-community.min.js"></script>
 </head>
 <body>
     <div class="top-buttons">
@@ -97,15 +96,8 @@
             <input type="text" id="searchInput" placeholder="Search inventory...">
         </div>
 
-        <!-- AG Grid with Pagination -->
+        <!-- AG Grid -->
         <div id="myGrid" class="ag-theme-alpine" style="height: 600px; width: 100%;"></div>
-        <div class="pagination">
-            <button id="firstPage" class="page-button">&lt;&lt;</button>
-            <button id="prevPage" class="page-button">&lt;</button>
-            <span id="pageInfo">Page 1 of 1</span>
-            <button id="nextPage" class="page-button">&gt;</button>
-            <button id="lastPage" class="page-button">&gt;&gt;</button>
-        </div>
 
         <!-- Add/Edit Modal Form -->
         <div id="formModal" class="modal">
@@ -226,28 +218,93 @@
         let gridApi;
         let columnApi;
         let currentItem = null;
-        let currentPage = 1;
-        let totalPages = 1;
 
-        // Column Definitions
+        // Column Definitions with Community Edition features
         const columnDefs = [
-            { field: 'site_name', headerName: 'Site Name', sortable: true, filter: true },
-            { field: 'room_name', headerName: 'Room Name', sortable: true, filter: true },
-            { field: 'room_number', headerName: 'Room Number', sortable: true, filter: true },
-            { field: 'asset_tag', headerName: 'Asset Tag', sortable: true, filter: true },
-            { field: 'asset_type', headerName: 'Asset Type', sortable: true, filter: true },
-            { field: 'model', headerName: 'Model', sortable: true, filter: true },
-            { field: 'serial_number', headerName: 'Serial Number', sortable: true, filter: true },
-            { field: 'notes', headerName: 'Notes', sortable: true, filter: true },
-            { field: 'assigned_to', headerName: 'Assigned To', sortable: true, filter: true },
-            { field: 'date_assigned', headerName: 'Date Assigned', sortable: true, filter: true },
-            { field: 'date_decommissioned', headerName: 'Date Decommissioned', sortable: true, filter: true },
+            { 
+                field: 'site_name', 
+                headerName: 'Site Name',
+                sortable: true,
+                filter: true,
+                resizable: true
+            },
+            { 
+                field: 'room_name',
+                headerName: 'Room Name',
+                sortable: true,
+                filter: true,
+                resizable: true
+            },
+            { 
+                field: 'room_number',
+                headerName: 'Room Number',
+                sortable: true,
+                filter: true,
+                resizable: true
+            },
+            { 
+                field: 'asset_tag',
+                headerName: 'Asset Tag',
+                sortable: true,
+                filter: true,
+                resizable: true
+            },
+            { 
+                field: 'asset_type',
+                headerName: 'Asset Type',
+                sortable: true,
+                filter: true,
+                resizable: true
+            },
+            { 
+                field: 'model',
+                headerName: 'Model',
+                sortable: true,
+                filter: true,
+                resizable: true
+            },
+            { 
+                field: 'serial_number',
+                headerName: 'Serial Number',
+                sortable: true,
+                filter: true,
+                resizable: true
+            },
+            { 
+                field: 'notes',
+                headerName: 'Notes',
+                sortable: true,
+                filter: true,
+                resizable: true
+            },
+            { 
+                field: 'assigned_to',
+                headerName: 'Assigned To',
+                sortable: true,
+                filter: true,
+                resizable: true
+            },
+            { 
+                field: 'date_assigned',
+                headerName: 'Date Assigned',
+                sortable: true,
+                filter: true,
+                resizable: true
+            },
+            { 
+                field: 'date_decommissioned',
+                headerName: 'Date Decommissioned',
+                sortable: true,
+                filter: true,
+                resizable: true
+            },
             {
                 headerName: 'Actions',
                 field: 'actions',
                 sortable: false,
                 filter: false,
                 pinned: 'right',
+                width: 100,
                 cellRenderer: (params) => {
                     const editBtn = document.createElement('button');
                     editBtn.innerHTML = 'Edit';
@@ -258,9 +315,53 @@
             }
         ];
 
+        // Grid Options with Community Edition features
+        const gridOptions = {
+            columnDefs: columnDefs,
+            defaultColDef: {
+                flex: 1,
+                minWidth: 100,
+                resizable: true,
+                sortable: true,
+                filter: true
+            },
+            rowData: [],
+            pagination: true,
+            paginationPageSize: 35,
+            suppressRowClickSelection: true,
+            rowSelection: 'single',
+            onGridReady: (params) => {
+                gridApi = params.api;
+                columnApi = params.columnApi;
+                
+                // Load saved column state
+                const savedState = localStorage.getItem('gridState');
+                if (savedState) {
+                    columnApi.applyColumnState(JSON.parse(savedState));
+                }
+                
+                // Initial data load
+                loadInventory(1);
+            },
+            onRowClicked: (params) => showDetails(params.data),
+            getRowHeight: () => 40,
+            // Column state events
+            onColumnMoved: (event) => {
+                const state = event.columnApi.getColumnState();
+                localStorage.setItem('gridState', JSON.stringify(state));
+            },
+            onColumnVisible: (event) => {
+                const state = event.columnApi.getColumnState();
+                localStorage.setItem('gridState', JSON.stringify(state));
+            },
+            onColumnResized: (event) => {
+                const state = event.columnApi.getColumnState();
+                localStorage.setItem('gridState', JSON.stringify(state));
+            }
+        };
+
         // Load inventory data
         async function loadInventory(page = 1) {
-            currentPage = page;
             const params = new URLSearchParams({
                 page: page,
                 site_name: document.getElementById('filterSiteName')?.value || '',
@@ -285,21 +386,10 @@
                 const data = await response.json();
                 if (Array.isArray(data.items)) {
                     gridApi.setRowData(data.items);
-                    totalPages = data.total_pages;
-                    updatePagination();
                 }
             } catch (error) {
                 console.error('Error loading inventory:', error);
             }
-        }
-
-        // Update pagination controls
-        function updatePagination() {
-            document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
-            document.getElementById('firstPage').disabled = currentPage === 1;
-            document.getElementById('prevPage').disabled = currentPage === 1;
-            document.getElementById('nextPage').disabled = currentPage === totalPages;
-            document.getElementById('lastPage').disabled = currentPage === totalPages;
         }
 
         // Show details modal
@@ -357,52 +447,7 @@
         // Initialize Grid
         document.addEventListener('DOMContentLoaded', () => {
             const gridDiv = document.querySelector('#myGrid');
-            const gridOptions = {
-                columnDefs: columnDefs,
-                defaultColDef: {
-                    flex: 1,
-                    minWidth: 100,
-                    resizable: true,
-                    sortable: true,
-                    filter: true,
-                    menuTabs: ['filterMenuTab', 'columnsMenuTab']
-                },
-                rowData: [],
-                suppressRowClickSelection: true,
-                rowSelection: 'single',
-                onGridReady: (params) => {
-                    gridApi = params.api;
-                    columnApi = params.columnApi;
-                    
-                    // Load saved column state
-                    const savedState = localStorage.getItem('gridState');
-                    if (savedState) {
-                        columnApi.applyColumnState(JSON.parse(savedState));
-                    }
-                    
-                    // Initial data load
-                    loadInventory(1);
-                },
-                onRowClicked: (params) => showDetails(params.data),
-                getRowHeight: () => 40,
-                // Column state events
-                onColumnMoved: (event) => {
-                    const state = event.columnApi.getColumnState();
-                    localStorage.setItem('gridState', JSON.stringify(state));
-                },
-                onColumnVisible: (event) => {
-                    const state = event.columnApi.getColumnState();
-                    localStorage.setItem('gridState', JSON.stringify(state));
-                }
-            };
-
             new agGrid.Grid(gridDiv, gridOptions);
-
-            // Pagination event listeners
-            document.getElementById('firstPage').addEventListener('click', () => loadInventory(1));
-            document.getElementById('prevPage').addEventListener('click', () => loadInventory(currentPage - 1));
-            document.getElementById('nextPage').addEventListener('click', () => loadInventory(currentPage + 1));
-            document.getElementById('lastPage').addEventListener('click', () => loadInventory(totalPages));
 
             // Theme toggle
             const themeToggle = document.getElementById('themeToggle');
@@ -587,6 +632,15 @@
             // Search functionality
             document.getElementById('searchInput').addEventListener('input', function(e) {
                 gridApi.setQuickFilter(e.target.value);
+            });
+
+            // Add Hardware Button
+            document.getElementById('addHardwareBtn').addEventListener('click', () => {
+                document.getElementById('hardwareId').value = '';
+                document.getElementById('hardwareForm').reset();
+                document.getElementById('modalTitle').textContent = 'Add New Hardware';
+                document.getElementById('submitButton').textContent = 'Add Hardware';
+                document.getElementById('formModal').style.display = 'block';
             });
         });
     </script>

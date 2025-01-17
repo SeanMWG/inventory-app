@@ -29,13 +29,11 @@ CORS(app, supports_credentials=True)
 
 # Get database connection string
 db_connection = os.getenv('DATABASE_URL', '')
-logging.info("Checking database configuration...")
 logging.info(f"Database URL exists: {bool(db_connection)}")
 
 def get_db_connection():
     """Get database connection with better error handling"""
     try:
-        # Use the provided connection string
         logging.info("Attempting database connection")
         return pyodbc.connect(db_connection)
     except Exception as e:
@@ -43,11 +41,121 @@ def get_db_connection():
         logging.error(traceback.format_exc())
         raise
 
+def get_user_role():
+    """Get user role from Azure AD claims"""
+    try:
+        # Log all headers for debugging
+        logging.debug("All request headers:")
+        for header, value in request.headers.items():
+            logging.debug(f"{header}: {value}")
+
+        # Get the principal header
+        principal = request.headers.get('X-MS-CLIENT-PRINCIPAL', '')
+        if not principal:
+            logging.warning("No principal header found")
+            return app.config['DEFAULT_ROLE']
+
+        # Decode base64 principal
+        import base64
+        principal_json = base64.b64decode(principal).decode('utf-8')
+        principal_data = json.loads(principal_json)
+        
+        # Log the principal data for debugging
+        logging.debug(f"Principal data: {principal_data}")
+        
+        # Extract roles from claims
+        claims = principal_data.get('claims', [])
+        roles = []
+        for claim in claims:
+            if claim['typ'].lower() in ['roles', 'role']:
+                # Split in case multiple roles are in one claim
+                claim_roles = claim['val'].split(',')
+                roles.extend([r.strip() for r in claim_roles])
+        
+        logging.debug(f"Found roles: {roles}")
+        
+        # Create case-insensitive role mapping
+        role_map = {k.lower(): k for k in app.config['ROLES'].keys()}
+        
+        # Map Azure AD roles to app roles
+        for role in roles:
+            role_lower = role.lower()
+            if role_lower in role_map:
+                actual_role = role_map[role_lower]
+                logging.info(f"User assigned role: {actual_role}")
+                return actual_role
+        
+        # Return default role if no matching role found
+        logging.warning("No matching role found, using default")
+        return app.config['DEFAULT_ROLE']
+    except Exception as e:
+        logging.error(f"Error getting user role: {str(e)}")
+        logging.error(traceback.format_exc())
+        return app.config['DEFAULT_ROLE']
+
+def has_permission(required_permission):
+    """Check if the current user has the required permission"""
+    try:
+        user_role = get_user_role()
+        logging.debug(f"Checking permission '{required_permission}' for role '{user_role}'")
+        
+        if not user_role:
+            logging.warning("No user role found")
+            return False
+        
+        role_permissions = app.config['ROLE_PERMISSIONS'].get(user_role, [])
+        logging.debug(f"Role permissions: {role_permissions}")
+        
+        has_perm = required_permission in role_permissions
+        logging.debug(f"Has permission '{required_permission}': {has_perm}")
+        
+        return has_perm
+    except Exception as e:
+        logging.error(f"Error checking permissions: {str(e)}")
+        logging.error(traceback.format_exc())
+        return False
+
+@app.route('/api/user/role')
+def get_user_role_api():
+    """API endpoint to get the current user's role"""
+    try:
+        role = get_user_role()
+        permissions = app.config['ROLE_PERMISSIONS'].get(role, [])
+        logging.info(f"User role API - Role: {role}, Permissions: {permissions}")
+        return jsonify({
+            'role': role,
+            'permissions': permissions
+        })
+    except Exception as e:
+        logging.error(f"Error in role API: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+def role_required(permission):
+    """Decorator to require specific permission for a route"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            try:
+                if not has_permission(permission):
+                    logging.warning(f"Permission denied: {permission}")
+                    return jsonify({
+                        'error': 'Permission denied',
+                        'required_permission': permission
+                    }), 403
+                return f(*args, **kwargs)
+            except Exception as e:
+                logging.error(f"Error in role_required decorator: {str(e)}")
+                logging.error(traceback.format_exc())
+                return jsonify({'error': 'Internal server error'}), 500
+        return decorated_function
+    return decorator
+
 @app.route('/api/hardware', methods=['GET'])
+@role_required('view')
 def get_hardware():
     """Get hardware items with better error handling"""
     try:
-        logging.info("GET /api/hardware request received")
         page = request.args.get('page', 1, type=int)
         per_page = 35
         
@@ -113,7 +221,7 @@ def get_hardware():
             # Get items for current page
             offset = (page - 1) * per_page
             query = f"""
-            SELECT [site_name], [room_number], [room_name], [asset_tag], [asset_type],
+            SELECT [id], [site_name], [room_number], [room_name], [asset_tag], [asset_type],
                    [model], [serial_number], [notes], [assigned_to], [date_assigned], [date_decommissioned]
             FROM [dbo].[Formatted_Company_Inventory]
             WHERE {where_sql}
@@ -145,7 +253,8 @@ def get_hardware():
                 'items': items,
                 'total_pages': total_pages,
                 'current_page': page,
-                'total_items': total_items
+                'total_items': total_items,
+                'user_role': get_user_role()  # Include user role in response
             }
             
             logging.info("Successfully serialized items")
@@ -158,6 +267,99 @@ def get_hardware():
             'error': f'Database error: {str(e)}',
             'trace': traceback.format_exc()
         }), 500
+
+@app.route('/api/hardware', methods=['POST'])
+@role_required('add')
+def add_hardware():
+    try:
+        data = request.json
+        
+        # Connect to database
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Insert new record
+            query = """
+            INSERT INTO dbo.Formatted_Company_Inventory 
+            (site_name, room_number, room_name, asset_tag, asset_type,
+             model, serial_number, notes, assigned_to, date_assigned, date_decommissioned)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """
+            
+            cursor.execute(query, (
+                data['site_name'],
+                data['room_number'],
+                data['room_name'],
+                data['asset_tag'],
+                data['asset_type'],
+                data['model'],
+                data['serial_number'],
+                data.get('notes'),
+                data.get('assigned_to'),
+                data.get('date_assigned'),
+                data.get('date_decommissioned')
+            ))
+            
+            conn.commit()
+            return jsonify({'message': 'Hardware added successfully'}), 201
+            
+    except Exception as e:
+        logging.error(f"Error adding hardware: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/hardware/<int:id>', methods=['PUT'])
+@role_required('edit')
+def update_hardware(id):
+    try:
+        data = request.json
+        
+        # Connect to database
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Update record
+            query = """
+            UPDATE dbo.Formatted_Company_Inventory 
+            SET site_name = ?,
+                room_number = ?,
+                room_name = ?,
+                asset_tag = ?,
+                asset_type = ?,
+                model = ?,
+                serial_number = ?,
+                notes = ?,
+                assigned_to = ?,
+                date_assigned = ?,
+                date_decommissioned = ?
+            WHERE id = ?;
+            """
+            
+            cursor.execute(query, (
+                data['site_name'],
+                data['room_number'],
+                data['room_name'],
+                data['asset_tag'],
+                data['asset_type'],
+                data['model'],
+                data['serial_number'],
+                data.get('notes'),
+                data.get('assigned_to'),
+                data.get('date_assigned'),
+                data.get('date_decommissioned'),
+                id
+            ))
+            
+            if cursor.rowcount == 0:
+                return jsonify({'error': 'Item not found'}), 404
+            
+            conn.commit()
+            return jsonify({'message': 'Hardware updated successfully'}), 200
+            
+    except Exception as e:
+        logging.error(f"Error updating hardware: {str(e)}")
+        logging.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 400
 
 @app.route('/')
 def serve_index():
