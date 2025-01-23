@@ -205,6 +205,7 @@ def get_hardware():
     try:
         page = request.args.get('page', 1, type=int)
         per_page = 35
+        search_term = request.args.get('search', '').strip()
         
         # Get filter parameters
         filters = {
@@ -228,10 +229,19 @@ def get_hardware():
         with get_db_connection() as conn:
             cursor = conn.cursor()
             
-            # Build WHERE clause based on filters
+            # Build WHERE clause based on filters and search term
             where_clauses = []
             params = []
             
+            # Add search term condition if provided
+            if search_term:
+                search_fields = ['site_name', 'room_number', 'room_name', 'asset_tag', 
+                               'asset_type', 'model', 'serial_number', 'notes', 'assigned_to']
+                search_conditions = [f"{field} LIKE ?" for field in search_fields]
+                where_clauses.append(f"({' OR '.join(search_conditions)})")
+                params.extend([f"%{search_term}%"] * len(search_fields))
+            
+            # Add other filter conditions
             for field in ['site_name', 'room_number', 'room_name', 'asset_tag', 
                          'asset_type', 'model', 'serial_number', 'notes', 'assigned_to']:
                 if filters[field]:

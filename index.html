@@ -363,7 +363,7 @@
                 filter: true
             },
             rowData: [],
-            pagination: false, // Disable AG Grid's pagination
+            pagination: false, // Disable AG Grid's pagination since we're using server-side
             suppressRowClickSelection: true,
             rowSelection: 'single',
             onGridReady: (params) => {
@@ -383,11 +383,27 @@
             getRowHeight: () => 40
         };
 
+        // Search functionality with debounce
+        let searchTimeout;
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            
+            searchTimeout = setTimeout(() => {
+                currentPage = 1; // Reset to first page when searching
+                loadInventory(1);
+            }, 300);
+        });
+
         // Load inventory data
         async function loadInventory(page = 1) {
             currentPage = page;
+            const searchTerm = document.getElementById('searchInput').value;
+            
             const params = new URLSearchParams({
                 page: page,
+                search: searchTerm,
                 site_name: document.getElementById('filterSiteName')?.value || '',
                 room_number: document.getElementById('filterRoomNumber')?.value || '',
                 room_name: document.getElementById('filterRoomName')?.value || '',
@@ -410,7 +426,7 @@
                 const data = await response.json();
                 if (Array.isArray(data.items)) {
                     gridApi.setRowData(data.items);
-                    totalPages = Math.ceil(data.total_items / 35); // 35 items per page
+                    totalPages = Math.ceil(data.total_items / 35);
                     updatePaginationControls();
                 }
             } catch (error) {
@@ -422,96 +438,6 @@
             document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
             document.getElementById('prevPage').disabled = currentPage <= 1;
             document.getElementById('nextPage').disabled = currentPage >= totalPages;
-        }
-
-        // Show details modal
-        function showDetails(item) {
-            currentItem = item;
-            document.getElementById('detailSiteName').textContent = item.site_name;
-            document.getElementById('detailRoomNumber').textContent = item.room_number;
-            document.getElementById('detailRoomName').textContent = item.room_name;
-            document.getElementById('detailAssetTag').textContent = item.asset_tag;
-            document.getElementById('detailAssetType').textContent = item.asset_type;
-            document.getElementById('detailModel').textContent = item.model;
-            document.getElementById('detailSerialNumber').textContent = item.serial_number;
-            document.getElementById('detailNotes').textContent = item.notes || '';
-            document.getElementById('detailAssignedTo').textContent = item.assigned_to || '';
-            document.getElementById('detailDateAssigned').textContent = item.date_assigned ? new Date(item.date_assigned).toLocaleDateString() : '';
-            document.getElementById('detailDateDecommissioned').textContent = item.date_decommissioned ? new Date(item.date_decommissioned).toLocaleDateString() : '';
-            
-            // Show/hide edit button based on permissions
-            const editButton = document.getElementById('detailsEditButton');
-            editButton.style.display = userPermissions.includes('edit') ? 'block' : 'none';
-            editButton.onclick = () => editHardware(item);
-
-            // Set up audit button
-            const auditButton = document.getElementById('viewAuditButton');
-            auditButton.onclick = () => showAuditLog(item.asset_tag);
-            
-            document.getElementById('detailsModal').style.display = 'block';
-        }
-
-        // Show audit log
-        async function showAuditLog(assetTag) {
-            try {
-                const response = await fetch(`/api/audit/${assetTag}`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const auditEntries = await response.json();
-                
-                const tbody = document.getElementById('auditTableBody');
-                tbody.innerHTML = '';
-                
-                auditEntries.forEach(entry => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${new Date(entry.changed_at).toLocaleString()}</td>
-                        <td>${entry.action_type}</td>
-                        <td>${entry.field_name}</td>
-                        <td>${entry.old_value || ''}</td>
-                        <td>${entry.new_value || ''}</td>
-                        <td>${entry.changed_by}</td>
-                    `;
-                    tbody.appendChild(row);
-                });
-                
-                document.getElementById('auditModal').style.display = 'block';
-            } catch (error) {
-                console.error('Error loading audit log:', error);
-                alert('Error loading change history');
-            }
-        }
-
-        // Edit hardware
-        function editHardware(item) {
-            if (!userPermissions.includes('edit')) {
-                alert('You do not have permission to edit items');
-                return;
-            }
-
-            // Close details modal if it's open
-            document.getElementById('detailsModal').style.display = 'none';
-
-            // Fill form with item data
-            document.getElementById('siteName').value = item.site_name;
-            document.getElementById('roomNumber').value = item.room_number;
-            document.getElementById('roomName').value = item.room_name;
-            document.getElementById('assetTag').value = item.asset_tag;
-            document.getElementById('assetType').value = item.asset_type;
-            document.getElementById('model').value = item.model;
-            document.getElementById('serialNumber').value = item.serial_number;
-            document.getElementById('notes').value = item.notes || '';
-            document.getElementById('assignedTo').value = item.assigned_to || '';
-            document.getElementById('dateAssigned').value = item.date_assigned ? item.date_assigned.split('T')[0] : '';
-            document.getElementById('dateDecommissioned').value = item.date_decommissioned ? item.date_decommissioned.split('T')[0] : '';
-            
-            // Update modal title and button
-            document.getElementById('modalTitle').textContent = 'Edit Hardware';
-            document.getElementById('submitButton').textContent = 'Update Hardware';
-            
-            // Show modal
-            document.getElementById('formModal').style.display = 'block';
         }
 
         // Initialize Grid
@@ -576,6 +502,7 @@
 
             // Apply filters
             document.getElementById('applyFilters').addEventListener('click', () => {
+                currentPage = 1; // Reset to first page when applying filters
                 loadInventory(1);
             });
 
@@ -584,6 +511,7 @@
                 document.querySelectorAll('.filter-group input').forEach(input => {
                     input.value = '';
                 });
+                currentPage = 1; // Reset to first page when clearing filters
                 loadInventory(1);
             });
 
@@ -709,11 +637,6 @@
                 localStorage.removeItem('gridState');
                 columnApi.resetColumnState();
                 alert('Layout reset to default');
-            });
-
-            // Search functionality
-            document.getElementById('searchInput').addEventListener('input', function(e) {
-                gridApi.setQuickFilter(e.target.value);
             });
 
             // Add Hardware Button
