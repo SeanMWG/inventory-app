@@ -1,43 +1,81 @@
-# Loaner Management Feature Migration
+# Loaner Management Migration
 
-This migration adds loaner tracking functionality to the inventory system.
+This directory contains the SQL scripts and Python utilities for setting up the loaner device management system.
 
 ## Database Changes
 
-1. Added `is_loaner` flag to inventory table
-2. Created `LoanerCheckouts` table for tracking checkouts
-3. Created views for querying available and checked-out items:
-   - `AvailableLoaners`
-   - `CheckedOutLoaners`
+The migration adds the following to the database:
 
-## Files Changed
+1. New column `is_loaner` (bit) to `Formatted_Company_Inventory` table
+2. New table `LoanerCheckouts` for tracking device loans
+3. Two views:
+   - `AvailableLoaners`: Shows devices marked as loaners that aren't checked out
+   - `CheckedOutLoaners`: Shows currently checked out loaner devices
+4. Supporting indexes for performance
 
-- `app.py`: Added loaner routes blueprint and new endpoint
-- `templates/index.html`: Added navigation to loaner management
-- `templates/loaner_management.html`: New UI for managing loaners
-- `routes/loaner_routes.py`: New API endpoints for loaner operations
-- `migration/*.sql`: Database migration scripts
+## Running the Migration
 
-## Migration Order
+1. Set the DATABASE_URL environment variable:
+```bash
+# Windows CMD
+set DATABASE_URL="Driver={ODBC Driver 17 for SQL Server};Server=tcp:mwg-inventory-app.database.windows.net,1433;Database=mwg-inventory-app;Uid=your-username;Pwd=your-password;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
 
-1. Run database scripts in order:
-   ```sql
-   -- Add is_loaner flag and create tables
-   step1_create_locations.sql
-   step2_populate_locations.sql
-   step3_add_location_id.sql
-   step4_add_foreign_key.sql
-   ```
+# Windows PowerShell
+$env:DATABASE_URL="Driver={ODBC Driver 17 for SQL Server};Server=tcp:mwg-inventory-app.database.windows.net,1433;Database=mwg-inventory-app;Uid=your-username;Pwd=your-password;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
+```
 
-2. Deploy application changes:
-   - Copy new files to server
-   - Update existing files
-   - Restart application
+2. Run the migration script:
+```bash
+python execute_loaner_migration.py
+```
 
-## Rollback Plan
+The script will:
+- Create necessary tables and views if they don't exist
+- Add required indexes
+- Verify all components were created successfully
 
-If issues occur:
-1. Drop new views
-2. Drop LoanerCheckouts table
-3. Remove is_loaner column
-4. Revert application code changes
+## Verifying the Migration
+
+The migration script includes verification steps that check:
+1. The `is_loaner` column exists in the inventory table
+2. The `LoanerCheckouts` table exists
+3. Both views are created
+4. Required indexes are present
+
+## Rollback
+
+To rollback the changes:
+
+```sql
+-- Drop views
+DROP VIEW IF EXISTS dbo.CheckedOutLoaners;
+DROP VIEW IF EXISTS dbo.AvailableLoaners;
+
+-- Drop loaner checkouts table
+DROP TABLE IF EXISTS dbo.LoanerCheckouts;
+
+-- Remove is_loaner column
+ALTER TABLE dbo.Formatted_Company_Inventory
+DROP COLUMN is_loaner;
+
+-- Drop indexes
+DROP INDEX IF EXISTS IX_Inventory_IsLoaner ON dbo.Formatted_Company_Inventory;
+DROP INDEX IF EXISTS IX_LoanerCheckouts_Dates ON dbo.LoanerCheckouts;
+```
+
+## API Endpoints
+
+The loaner management system adds these endpoints:
+
+- GET `/api/loaners/available` - List available loaner devices
+- GET `/api/loaners/checked-out` - List currently checked out devices
+- POST `/api/loaners/checkout` - Check out a device
+- POST `/api/loaners/checkin` - Check in a device
+
+## Frontend Changes
+
+A new loaner management interface is available at `/loaners` with:
+- Tab view for available/checked-out devices
+- Checkout form with user info and return date
+- Device details with audit history
+- Dark/light theme support
