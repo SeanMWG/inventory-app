@@ -11,6 +11,7 @@ import pyodbc
 from functools import wraps
 import json
 import traceback
+from routes.loaner_routes import loaner_bp
 
 # Configure logging
 logging.basicConfig(
@@ -26,6 +27,9 @@ app.config.from_object('config')
 
 # Configure CORS to work with credentials
 CORS(app, supports_credentials=True)
+
+# Register blueprints
+app.register_blueprint(loaner_bp)
 
 # Get database connection string
 db_connection = os.getenv('DATABASE_URL', '')
@@ -502,6 +506,10 @@ def get_audit_log(asset_tag):
 @app.route('/')
 def serve_index():
     return send_from_directory('.', 'index.html')
+
+@app.route('/loaners')
+def serve_loaner_management():
+    return send_from_directory('templates', 'loaner_management.html')
 
 @app.route('/<path:path>')
 def serve_static(path):

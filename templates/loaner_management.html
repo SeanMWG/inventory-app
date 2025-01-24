@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Loaner Management</title>
+    <style>
+        .tab-content {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-top: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .tab-button {
+            padding: 10px 20px;
+            border: 1px solid #ccc;
+            background: #f0f0f0;
+            cursor: pointer;
+        }
+        
+        .tab-button.active {
+            background: #fff;
+            border-bottom: none;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        th, td {
+            padding: 8px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        
+        th {
+            background-color: #f5f5f5;
+        }
+        
+        .action-button {
+            padding: 5px 10px;
+            margin: 2px;
+            cursor: pointer;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            width: 70%;
+            max-width: 500px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+    <div class="tabs">
+        <button class="tab-button active" onclick="showTab('available')">Available Loaners</button>
+        <button class="tab-button" onclick="showTab('checked-out')">Checked Out Items</button>
+    </div>
+
+    <div id="available" class="tab-content active">
+        <h2>Available Loaner Items</h2>
+        <table id="available-items">
+            <thead>
+                <tr>
+                    <th>Asset Tag</th>
+                    <th>Type</th>
+                    <th>Model</th>
+                    <th>Location</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div id="checked-out" class="tab-content">
+        <h2>Checked Out Items</h2>
+        <table id="checked-out-items">
+            <thead>
+                <tr>
+                    <th>Asset Tag</th>
+                    <th>Type</th>
+                    <th>Model</th>
+                    <th>Checked Out To</th>
+                    <th>Checkout Date</th>
+                    <th>Expected Return</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Checkout Modal -->
+    <div id="checkout-modal" class="modal">
+        <div class="modal-content">
+            <h3>Check Out Item</h3>
+            <form id="checkout-form">
+                <input type="hidden" id="checkout-inventory-id">
+                <div class="form-group">
+                    <label>Asset Tag:</label>
+                    <span id="checkout-asset-tag"></span>
+                </div>
+                <div class="form-group">
+                    <label for="checkout-user">User Name:</label>
+                    <input type="text" id="checkout-user" required>
+                </div>
+                <div class="form-group">
+                    <label for="checkout-expected-return">Expected Return Date:</label>
+                    <input type="date" id="checkout-expected-return">
+                </div>
+                <div class="form-group">
+                    <label for="checkout-notes">Notes:</label>
+                    <input type="text" id="checkout-notes">
+                </div>
+                <button type="submit" class="action-button">Check Out</button>
+                <button type="button" class="action-button" onclick="closeModal('checkout-modal')">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Check In Modal -->
+    <div id="checkin-modal" class="modal">
+        <div class="modal-content">
+            <h3>Check In Item</h3>
+            <form id="checkin-form">
+                <input type="hidden" id="checkin-checkout-id">
+                <div class="form-group">
+                    <label>Asset Tag:</label>
+                    <span id="checkin-asset-tag"></span>
+                </div>
+                <div class="form-group">
+                    <label>Checked Out To:</label>
+                    <span id="checkin-user"></span>
+                </div>
+                <div class="form-group">
+                    <label>Checkout Date:</label>
+                    <span id="checkin-date"></span>
+                </div>
+                <button type="submit" class="action-button">Check In</button>
+                <button type="button" class="action-button" onclick="closeModal('checkin-modal')">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            document.querySelector(`[onclick="showTab('${tabName}')"]`).classList.add('active');
+            refreshData();
+        }
+
+        // Modal functions
+        function openModal(modalId) {
+            document.getElementById(modalId).style.display = 'block';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        // Data loading
+        async function refreshData() {
+            try {
+                const [availableRes, checkedOutRes] = await Promise.all([
+                    fetch('/api/loaners/available'),
+                    fetch('/api/loaners/checked-out')
+                ]);
+
+                const available = await availableRes.json();
+                const checkedOut = await checkedOutRes.json();
+
+                displayAvailableItems(available);
+                displayCheckedOutItems(checkedOut);
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+
+        function displayAvailableItems(items) {
+            const tbody = document.querySelector('#available-items tbody');
+            tbody.innerHTML = items.map(item => `
+                <tr>
+                    <td>${item.asset_tag}</td>
+                    <td>${item.asset_type}</td>
+                    <td>${item.model}</td>
+                    <td>${item.site_name} - ${item.room_number}</td>
+                    <td>
+                        <button class="action-button" onclick="showCheckoutModal(${item.inventory_id}, '${item.asset_tag}')">
+                            Check Out
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function displayCheckedOutItems(items) {
+            const tbody = document.querySelector('#checked-out-items tbody');
+            tbody.innerHTML = items.map(item => `
+                <tr>
+                    <td>${item.asset_tag}</td>
+                    <td>${item.asset_type}</td>
+                    <td>${item.model}</td>
+                    <td>${item.user_name}</td>
+                    <td>${new Date(item.checkout_date).toLocaleDateString()}</td>
+                    <td>${item.expected_return_date ? new Date(item.expected_return_date).toLocaleDateString() : 'N/A'}</td>
+                    <td>
+                        <button class="action-button" onclick="showCheckinModal(
+                            ${item.checkout_id},
+                            '${item.asset_tag}',
+                            '${item.user_name}',
+                            '${item.checkout_date}'
+                        )">
+                            Check In
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Checkout handling
+        function showCheckoutModal(inventoryId, assetTag) {
+            document.getElementById('checkout-inventory-id').value = inventoryId;
+            document.getElementById('checkout-asset-tag').textContent = assetTag;
+            document.getElementById('checkout-user').value = '';
+            document.getElementById('checkout-expected-return').value = '';
+            document.getElementById('checkout-notes').value = '';
+            openModal('checkout-modal');
+        }
+
+        document.getElementById('checkout-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const response = await fetch('/api/loaners/checkout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        inventory_id: document.getElementById('checkout-inventory-id').value,
+                        user_name: document.getElementById('checkout-user').value,
+                        expected_return_date: document.getElementById('checkout-expected-return').value,
+                        notes: document.getElementById('checkout-notes').value
+                    })
+                });
+
+                if (!response.ok) throw new Error('Checkout failed');
+                
+                closeModal('checkout-modal');
+                refreshData();
+            } catch (error) {
+                console.error('Error during checkout:', error);
+                alert('Failed to check out item');
+            }
+        });
+
+        // Check-in handling
+        function showCheckinModal(checkoutId, assetTag, userName, checkoutDate) {
+            document.getElementById('checkin-checkout-id').value = checkoutId;
+            document.getElementById('checkin-asset-tag').textContent = assetTag;
+            document.getElementById('checkin-user').textContent = userName;
+            document.getElementById('checkin-date').textContent = new Date(checkoutDate).toLocaleDateString();
+            openModal('checkin-modal');
+        }
+
+        document.getElementById('checkin-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const response = await fetch('/api/loaners/checkin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        checkout_id: document.getElementById('checkin-checkout-id').value
+                    })
+                });
+
+                if (!response.ok) throw new Error('Check-in failed');
+                
+                closeModal('checkin-modal');
+                refreshData();
+            } catch (error) {
+                console.error('Error during check-in:', error);
+                alert('Failed to check in item');
+            }
+        });
+
+        // Initial load
+        refreshData();
+    </script>
+</body>
+</html>
