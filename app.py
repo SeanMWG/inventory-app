@@ -146,7 +146,7 @@ def get_hardware():
             # Get items for current page
             offset = (page - 1) * per_page
             query = f"""
-            SELECT [asset_tag], [site_name], [room_number], [room_name], [asset_type],
+            SELECT [inventory_id], [asset_tag], [site_name], [room_number], [room_name], [asset_type],
                    [model], [serial_number], [notes], [assigned_to], [date_assigned], [date_decommissioned]
             FROM [dbo].[Formatted_Company_Inventory]
             WHERE {where_sql}
