@@ -1,9 +1,32 @@
 from flask import Blueprint, jsonify, request
 from datetime import datetime
 import logging
-from app import get_db_connection, log_audit, get_user_name, role_required
+from utils import get_db_connection, log_audit, get_user_name
+from functools import wraps
 
 loaner_bp = Blueprint('loaner_bp', __name__)
+
+def role_required(permission):
+    """Decorator to require specific permission for a route"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            try:
+                from utils import has_permission
+                from flask import current_app
+                if not has_permission(permission, current_app.config):
+                    logging.warning(f"Permission denied: {permission}")
+                    return jsonify({
+                        'error': 'Permission denied',
+                        'required_permission': permission
+                    }), 403
+                return f(*args, **kwargs)
+            except Exception as e:
+                logging.error(f"Error in role_required decorator: {str(e)}")
+                logging.error(traceback.format_exc())
+                return jsonify({'error': 'Internal server error'}), 500
+        return decorated_function
+    return decorator
 
 @loaner_bp.route('/api/loaners/available', methods=['GET'])
 @role_required('view')
