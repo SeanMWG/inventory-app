@@ -1,10 +1,9 @@
-from flask import Flask, request, jsonify, render_template, url_for, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime
-import os
 
-app = Flask(__name__, static_folder='static', static_url_path='/static')
+app = Flask(__name__)
 CORS(app)
 
 # Configure SQLite database
@@ -29,10 +28,6 @@ with app.app_context():
     db.create_all()
 
 # Routes
-@app.route('/static/<path:filename>')
-def serve_static(filename):
-    return send_from_directory('static', filename)
-
 @app.route('/api/hardware', methods=['GET'])
 def get_hardware():
     try:
@@ -94,6 +89,10 @@ def add_hardware():
 @app.route('/')
 def serve_index():
     return render_template('index.html')
+
+@app.route('/static/<path:path>')
+def serve_static(path):
+    return send_from_directory('static', path)
 
 if __name__ == '__main__':
     app.run(debug=True)
