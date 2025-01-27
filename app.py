@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, render_template, redirect, session, url_for, send_from_directory
+from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime
 import os
@@ -9,11 +10,23 @@ import logging
 app = Flask(__name__)
 app.config.from_object('config')
 app.secret_key = os.urandom(24)  # Required for session management
-CORS(app)
+
+# Configure CORS
+CORS(app, supports_credentials=True, resources={
+    r"/*": {
+        "origins": ["https://inventory-app-sean.azurewebsites.net", "https://login.microsoftonline.com"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+        "supports_credentials": True
+    }
+})
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize SQLAlchemy for database models
+db = SQLAlchemy(app)
 
 # Initialize MSAL
 def _build_msal_app():
@@ -57,6 +70,18 @@ def get_db_connection():
         raise ValueError("DATABASE_URL environment variable is not set")
     return pyodbc.connect(conn_str)
 
+# Hardware Model
+class Hardware(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    manufacturer = db.Column(db.String(100), nullable=False)
+    model_number = db.Column(db.String(100), nullable=False)
+    hardware_type = db.Column(db.String(50), nullable=False)
+    serial_number = db.Column(db.String(100), unique=True, nullable=False)
+    assigned_to = db.Column(db.String(100))
+    location = db.Column(db.String(100))
+    date_assigned = db.Column(db.DateTime)
+    date_decommissioned = db.Column(db.DateTime)
+
 # Auth routes
 @app.route('/login')
 def login():
@@ -89,9 +114,12 @@ def authorized():
     return redirect(url_for('login'))
 
 # API Routes
-@app.route('/api/hardware', methods=['GET'])
+@app.route('/api/hardware', methods=['GET', 'OPTIONS'])
 @login_required
 def get_hardware():
+    if request.method == 'OPTIONS':
+        return '', 200
+        
     try:
         page = request.args.get('page', 1, type=int)
         per_page = 35
@@ -142,9 +170,12 @@ def get_hardware():
         if 'conn' in locals():
             conn.close()
 
-@app.route('/api/hardware', methods=['POST'])
+@app.route('/api/hardware', methods=['POST', 'OPTIONS'])
 @login_required
 def add_hardware():
+    if request.method == 'OPTIONS':
+        return '', 200
+        
     try:
         data = request.json
         conn = get_db_connection()
@@ -187,6 +218,18 @@ def serve_index():
 @app.route('/static/<path:path>')
 def serve_static(path):
     return send_from_directory('static', path)
+
+# Add CORS headers after request
+@app.after_request
+def after_request(response):
+    origin = request.headers.get('Origin')
+    if origin in ['https://inventory-app-sean.azurewebsites.net', 'https://login.microsoftonline.com']:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        response.headers.add('Access-Control-Max-Age', '3600')
+    return response
 
 if __name__ == '__main__':
     app.run(debug=True)
