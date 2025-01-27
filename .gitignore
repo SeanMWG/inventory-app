@@ -35,3 +35,11 @@ flask_session/
 *.pyc
 __pycache__/
 .DS_Store
+
+# Files containing sensitive information
+analyze_current_data.py
+*_backup.*
+check_data.py
+check_db_structure.py
+check_odbc_driver.py
+test_db.py
