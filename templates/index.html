@@ -14,9 +14,154 @@ body {
     color: #333;
 }
 
+body[data-theme="dark"] {
+    background-color: #1e1e1e;
+    color: #ffffff;
+}
+
 .container {
     max-width: 1200px;
     margin: 0 auto;
+}
+
+/* Top buttons */
+.top-buttons {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.user-role {
+    background-color: #007bff;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.9em;
+}
+
+.logout-button {
+    color: #dc3545;
+    text-decoration: none;
+    padding: 5px 10px;
+    border: 1px solid #dc3545;
+    border-radius: 4px;
+}
+
+.logout-button:hover {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Theme toggle */
+.theme-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: 4px;
+    color: inherit;
+}
+
+.theme-toggle:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+body[data-theme="dark"] .theme-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Action buttons */
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.action-button {
+    padding: 8px 16px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.action-button:hover {
+    background-color: #0056b3;
+}
+
+/* Filter panel */
+.filter-panel {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+body[data-theme="dark"] .filter-panel {
+    background-color: #2d2d2d;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.filter-panel.active {
+    display: block;
+}
+
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.filter-group label {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.filter-group input {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: white;
+    color: #333;
+}
+
+body[data-theme="dark"] .filter-group input {
+    background-color: #3d3d3d;
+    border-color: #4d4d4d;
+    color: white;
+}
+
+.date-range {
+    display: flex;
+    gap: 10px;
+}
+
+.filter-actions {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
 }
 
 /* Search container */
@@ -32,22 +177,13 @@ body {
     font-size: 16px;
 }
 
-/* Add Hardware Button */
-#addHardwareBtn {
-    padding: 8px 16px;
-    background-color: #007bff;
+body[data-theme="dark"] .search-container input {
+    background-color: #3d3d3d;
+    border-color: #4d4d4d;
     color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    margin-bottom: 20px;
 }
 
-#addHardwareBtn:hover {
-    background-color: #0056b3;
-}
-
-/* Modal styles */
+/* Modals */
 .modal {
     display: none;
     position: fixed;
@@ -70,6 +206,10 @@ body {
     overflow-y: auto;
 }
 
+body[data-theme="dark"] .modal-content {
+    background-color: #2d2d2d;
+}
+
 .close {
     position: absolute;
     right: 20px;
@@ -81,6 +221,14 @@ body {
 
 .close:hover {
     color: #333;
+}
+
+body[data-theme="dark"] .close {
+    color: #999;
+}
+
+body[data-theme="dark"] .close:hover {
+    color: #fff;
 }
 
 /* Form styles */
@@ -102,11 +250,25 @@ body {
     box-sizing: border-box;
 }
 
+body[data-theme="dark"] .form-group input {
+    background-color: #3d3d3d;
+    border-color: #4d4d4d;
+    color: white;
+}
+
 /* Table styles */
 #inventoryTable {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 20px;
+    background-color: #fff;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+body[data-theme="dark"] #inventoryTable {
+    background-color: #2d2d2d;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 #inventoryTable th,
@@ -116,13 +278,26 @@ body {
     border-bottom: 1px solid #ddd;
 }
 
+body[data-theme="dark"] #inventoryTable th,
+body[data-theme="dark"] #inventoryTable td {
+    border-color: #4d4d4d;
+}
+
 #inventoryTable th {
     background-color: #f8f9fa;
     font-weight: bold;
 }
 
+body[data-theme="dark"] #inventoryTable th {
+    background-color: #3d3d3d;
+}
+
 #inventoryTable tr:hover {
     background-color: #f5f5f5;
+}
+
+body[data-theme="dark"] #inventoryTable tr:hover {
+    background-color: #3d3d3d;
 }
 
 /* Pagination */
@@ -148,83 +323,124 @@ body {
     cursor: not-allowed;
 }
 
-/* Form submit button */
-form button[type="submit"] {
-    padding: 8px 16px;
-    background-color: #28a745;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    width: 100%;
-    margin-top: 10px;
-}
-
-form button[type="submit"]:hover {
-    background-color: #218838;
+body[data-theme="dark"] .pagination button:disabled {
+    background-color: #4d4d4d;
 }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- Top buttons -->
+        <div class="top-buttons">
+            <div class="user-info">
+                <span class="user-role">Admin</span>
+                <a href="/logout" class="logout-button">Logout</a>
+            </div>
+            <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
+        </div>
+
         <h1>IT Hardware Inventory</h1>
+
+        <!-- Action buttons -->
+        <div class="action-buttons">
+            <button id="addHardwareBtn" class="action-button">Add New Hardware</button>
+            <button onclick="toggleFilters()" class="action-button">Show Filters</button>
+        </div>
+
+        <!-- Filter panel -->
+        <div id="filterPanel" class="filter-panel">
+            <div class="filter-grid">
+                <div class="filter-group">
+                    <label for="filterManufacturer">Manufacturer</label>
+                    <input type="text" id="filterManufacturer">
+                </div>
+                <div class="filter-group">
+                    <label for="filterModel">Model</label>
+                    <input type="text" id="filterModel">
+                </div>
+                <div class="filter-group">
+                    <label for="filterType">Type</label>
+                    <input type="text" id="filterType">
+                </div>
+                <div class="filter-group">
+                    <label for="filterSerial">Serial Number</label>
+                    <input type="text" id="filterSerial">
+                </div>
+                <div class="filter-group">
+                    <label for="filterAssigned">Assigned To</label>
+                    <input type="text" id="filterAssigned">
+                </div>
+                <div class="filter-group">
+                    <label for="filterLocation">Location</label>
+                    <input type="text" id="filterLocation">
+                </div>
+                <div class="filter-group">
+                    <label>Date Assigned</label>
+                    <div class="date-range">
+                        <input type="date" id="filterDateAssignedFrom">
+                        <input type="date" id="filterDateAssignedTo">
+                    </div>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button onclick="applyFilters()" class="action-button">Apply Filters</button>
+                <button onclick="clearFilters()" class="action-button">Clear Filters</button>
+            </div>
+        </div>
 
         <!-- Search Field -->
         <div class="search-container">
             <input type="text" id="searchInput" placeholder="Search inventory...">
         </div>
-
-        <!-- Add Hardware Button -->
-        <button id="addHardwareBtn">Add New Hardware</button>
         
         <!-- Modal Form -->
         <div id="formModal" class="modal">
             <div class="modal-content">
                 <span class="close">&times;</span>
-            <h2>Add New Hardware</h2>
-            <form id="hardwareForm">
-                <div class="form-group">
-                    <label for="manufacturer">Manufacturer:</label>
-                    <input type="text" id="manufacturer" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="modelNumber">Model Number:</label>
-                    <input type="text" id="modelNumber" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="hardwareType">Hardware Type:</label>
-                    <input type="text" id="hardwareType" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="serialNumber">Serial/Service Tag Number:</label>
-                    <input type="text" id="serialNumber" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="assignedTo">Assigned To:</label>
-                    <input type="text" id="assignedTo">
-                </div>
-                
-                <div class="form-group">
-                    <label for="location">Location:</label>
-                    <input type="text" id="location">
-                </div>
-                
-                <div class="form-group">
-                    <label for="dateAssigned">Date Assigned:</label>
-                    <input type="date" id="dateAssigned">
-                </div>
-                
-                <div class="form-group">
-                    <label for="dateDecommissioned">Date Decommissioned:</label>
-                    <input type="date" id="dateDecommissioned">
-                </div>
-                
-                <button type="submit">Add Hardware</button>
-            </form>
+                <h2>Add New Hardware</h2>
+                <form id="hardwareForm">
+                    <div class="form-group">
+                        <label for="manufacturer">Manufacturer:</label>
+                        <input type="text" id="manufacturer" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="modelNumber">Model Number:</label>
+                        <input type="text" id="modelNumber" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="hardwareType">Hardware Type:</label>
+                        <input type="text" id="hardwareType" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="serialNumber">Serial/Service Tag Number:</label>
+                        <input type="text" id="serialNumber" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="assignedTo">Assigned To:</label>
+                        <input type="text" id="assignedTo">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="location">Location:</label>
+                        <input type="text" id="location">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dateAssigned">Date Assigned:</label>
+                        <input type="date" id="dateAssigned">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dateDecommissioned">Date Decommissioned:</label>
+                        <input type="date" id="dateDecommissioned">
+                    </div>
+                    
+                    <button type="submit">Add Hardware</button>
+                </form>
             </div>
         </div>
 
@@ -258,6 +474,30 @@ form button[type="submit"]:hover {
     </div>
 
     <script>
+        // Theme toggle
+        function toggleTheme() {
+            const body = document.body;
+            const currentTheme = body.getAttribute('data-theme');
+            body.setAttribute('data-theme', currentTheme === 'dark' ? 'light' : 'dark');
+        }
+
+        // Filter panel toggle
+        function toggleFilters() {
+            const filterPanel = document.getElementById('filterPanel');
+            filterPanel.classList.toggle('active');
+        }
+
+        function applyFilters() {
+            // TODO: Implement filter logic
+            toggleFilters();
+        }
+
+        function clearFilters() {
+            const inputs = document.querySelectorAll('#filterPanel input');
+            inputs.forEach(input => input.value = '');
+            toggleFilters();
+        }
+
         // Modal controls
         const modal = document.getElementById('formModal');
         const btn = document.getElementById('addHardwareBtn');
