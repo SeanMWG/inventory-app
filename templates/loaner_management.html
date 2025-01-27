@@ -1,213 +1,697 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Loaner Management</title>
-    <link rel="stylesheet" href="/static/styles.css">
-    <style>
-        .tab-content {
-            display: none;
-            padding: 20px;
-            border: 1px solid #ccc;
-            border-top: none;
-        }
-        
-        .tab-content.active {
-            display: block;
-        }
-        
-        .tab-button {
-            padding: 10px 20px;
-            border: 1px solid #ccc;
-            background: #f0f0f0;
-            cursor: pointer;
-        }
-        
-        .tab-button.active {
-            background: #fff;
-            border-bottom: none;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        
-        th, td {
-            padding: 8px;
-            border: 1px solid #ddd;
-            text-align: left;
-        }
-        
-        th {
-            background-color: #f5f5f5;
-        }
-        
-        .action-button {
-            padding: 5px 10px;
-            margin: 2px;
-            cursor: pointer;
-        }
-        
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-        
-        .modal-content {
-            background-color: white;
-            margin: 15% auto;
-            padding: 20px;
-            width: 70%;
-            max-width: 500px;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-        }
-        
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 8px;
-            box-sizing: border-box;
-        }
-
-        .nav-button {
-            display: inline-block;
-            padding: 10px 20px;
-            margin: 10px;
-            background-color: #007bff;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-        }
-        
-        .nav-button:hover {
-            background-color: #0056b3;
-        }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loaner Device Management</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <!-- AG Grid Community Edition -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-grid.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-theme-alpine.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-theme-alpine-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/dist/ag-grid-community.min.js"></script>
 </head>
 <body>
-    <div class="nav-section">
-        <a href="/" class="nav-button">Back to Inventory</a>
+    <div class="top-buttons">
+        <div class="user-info">
+            <span id="userName">Loading...</span>
+            <span id="userRole" class="user-role"></span>
+            <a href="/.auth/logout?post_logout_redirect_uri=/" class="logout-button">Logout</a>
+        </div>
+        <button id="themeToggle" class="theme-toggle">
+            <span class="icon">🌞</span>
+            <span class="text">Light Mode</span>
+        </button>
     </div>
-
     <div class="container">
-        <h1>Loaner Management</h1>
+        <h1>Loaner Device Management</h1>
 
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <a href="/" class="action-button">Back to Inventory</a>
+            <button id="toggleFilters" class="filter-button toggle-filters">Show Filters</button>
+            <button id="saveLayout" class="action-button">Save Layout</button>
+            <button id="resetLayout" class="action-button">Reset Layout</button>
+        </div>
+
+        <!-- Filter Panel -->
+        <div id="filterPanel" class="filter-panel">
+            <h3>Advanced Filters</h3>
+            <div class="filter-grid">
+                <div class="filter-group">
+                    <label for="filterAssetTag">Asset Tag:</label>
+                    <input type="text" id="filterAssetTag">
+                </div>
+                <div class="filter-group">
+                    <label for="filterAssetType">Asset Type:</label>
+                    <input type="text" id="filterAssetType">
+                </div>
+                <div class="filter-group">
+                    <label for="filterModel">Model:</label>
+                    <input type="text" id="filterModel">
+                </div>
+                <div class="filter-group">
+                    <label for="filterSerialNumber">Serial Number:</label>
+                    <input type="text" id="filterSerialNumber">
+                </div>
+                <div class="filter-group">
+                    <label for="filterAssignedTo">Assigned To:</label>
+                    <input type="text" id="filterAssignedTo">
+                </div>
+                <div class="filter-group">
+                    <label>Checkout Date Range:</label>
+                    <div class="date-range">
+                        <input type="date" id="filterCheckoutFrom" placeholder="From">
+                        <input type="date" id="filterCheckoutTo" placeholder="To">
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label>Expected Return Date Range:</label>
+                    <div class="date-range">
+                        <input type="date" id="filterReturnFrom" placeholder="From">
+                        <input type="date" id="filterReturnTo" placeholder="To">
+                    </div>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button id="clearFilters" class="filter-button clear-filters">Clear Filters</button>
+                <button id="applyFilters" class="filter-button apply-filters">Apply Filters</button>
+            </div>
+        </div>
+
+        <!-- Search Field -->
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="Search loaners...">
+        </div>
+
+        <!-- Tabs -->
         <div class="tabs">
-            <button class="tab-button active" onclick="showTab('available')">Available Loaners</button>
-            <button class="tab-button" onclick="showTab('checked-out')">Checked Out Items</button>
+            <button id="availableTab" class="tab-button active">Available Devices</button>
+            <button id="checkedOutTab" class="tab-button">Checked Out Devices</button>
         </div>
 
-        <div id="available" class="tab-content active">
-            <h2>Available Loaner Items</h2>
-            <table id="available-items">
-                <thead>
-                    <tr>
-                        <th>Asset Tag</th>
-                        <th>Type</th>
-                        <th>Model</th>
-                        <th>Location</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>
-
-        <div id="checked-out" class="tab-content">
-            <h2>Checked Out Items</h2>
-            <table id="checked-out-items">
-                <thead>
-                    <tr>
-                        <th>Asset Tag</th>
-                        <th>Type</th>
-                        <th>Model</th>
-                        <th>Checked Out To</th>
-                        <th>Checkout Date</th>
-                        <th>Expected Return</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>
+        <!-- AG Grid -->
+        <div id="myGrid" class="ag-theme-alpine" style="height: 600px; width: 100%;"></div>
 
         <!-- Checkout Modal -->
-        <div id="checkout-modal" class="modal">
+        <div id="checkoutModal" class="modal">
             <div class="modal-content">
                 <span class="close">&times;</span>
-                <h3>Check Out Item</h3>
-                <form id="checkout-form">
-                    <input type="hidden" id="checkout-inventory-id">
+                <h2>Checkout Device</h2>
+                <form id="checkoutForm">
+                    <input type="hidden" id="inventoryId">
                     <div class="form-group">
-                        <label>Asset Tag:</label>
-                        <span id="checkout-asset-tag"></span>
+                        <label for="userName">User Name:</label>
+                        <input type="text" id="userName" required>
                     </div>
                     <div class="form-group">
-                        <label for="checkout-user">User Name:</label>
-                        <input type="text" id="checkout-user" required>
+                        <label for="expectedReturnDate">Expected Return Date:</label>
+                        <input type="date" id="expectedReturnDate" required>
                     </div>
                     <div class="form-group">
-                        <label for="checkout-expected-return">Expected Return Date:</label>
-                        <input type="date" id="checkout-expected-return">
+                        <label for="checkoutNotes">Notes:</label>
+                        <textarea id="checkoutNotes"></textarea>
                     </div>
-                    <div class="form-group">
-                        <label for="checkout-notes">Notes:</label>
-                        <input type="text" id="checkout-notes">
-                    </div>
-                    <button type="submit" class="action-button">Check Out</button>
-                    <button type="button" class="action-button" onclick="closeModal('checkout-modal')">Cancel</button>
+                    <button type="submit" id="submitCheckout">Checkout Device</button>
                 </form>
             </div>
         </div>
 
-        <!-- Check In Modal -->
-        <div id="checkin-modal" class="modal">
+        <!-- Details Modal -->
+        <div id="detailsModal" class="details-modal">
+            <div class="details-content">
+                <span class="close">&times;</span>
+                <h2>Device Details</h2>
+                <div class="details-grid">
+                    <div class="details-item">
+                        <div class="details-label">Asset Tag</div>
+                        <div class="details-value" id="detailAssetTag"></div>
+                    </div>
+                    <div class="details-item">
+                        <div class="details-label">Asset Type</div>
+                        <div class="details-value" id="detailAssetType"></div>
+                    </div>
+                    <div class="details-item">
+                        <div class="details-label">Model</div>
+                        <div class="details-value" id="detailModel"></div>
+                    </div>
+                    <div class="details-item">
+                        <div class="details-label">Serial Number</div>
+                        <div class="details-value" id="detailSerialNumber"></div>
+                    </div>
+                    <div class="details-item">
+                        <div class="details-label">Status</div>
+                        <div class="details-value" id="detailStatus"></div>
+                    </div>
+                    <div class="details-item">
+                        <div class="details-label">Current User</div>
+                        <div class="details-value" id="detailCurrentUser"></div>
+                    </div>
+                    <div class="details-item">
+                        <div class="details-label">Checkout Date</div>
+                        <div class="details-value" id="detailCheckoutDate"></div>
+                    </div>
+                    <div class="details-item">
+                        <div class="details-label">Expected Return</div>
+                        <div class="details-value" id="detailExpectedReturn"></div>
+                    </div>
+                    <div class="details-item">
+                        <div class="details-label">Notes</div>
+                        <div class="details-value" id="detailNotes"></div>
+                    </div>
+                </div>
+                <div class="details-actions">
+                    <button class="view-audit-button" id="viewAuditButton">View History</button>
+                    <button class="checkout-button" id="checkoutButton">Checkout</button>
+                    <button class="checkin-button" id="checkinButton">Check In</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audit Log Modal -->
+        <div id="auditModal" class="modal">
             <div class="modal-content">
                 <span class="close">&times;</span>
-                <h3>Check In Item</h3>
-                <form id="checkin-form">
-                    <input type="hidden" id="checkin-checkout-id">
-                    <div class="form-group">
-                        <label>Asset Tag:</label>
-                        <span id="checkin-asset-tag"></span>
-                    </div>
-                    <div class="form-group">
-                        <label>Checked Out To:</label>
-                        <span id="checkin-user"></span>
-                    </div>
-                    <div class="form-group">
-                        <label>Checkout Date:</label>
-                        <span id="checkin-date"></span>
-                    </div>
-                    <button type="submit" class="action-button">Check In</button>
-                    <button type="button" class="action-button" onclick="closeModal('checkin-modal')">Cancel</button>
-                </form>
+                <h2>Change History</h2>
+                <div class="audit-container">
+                    <table class="audit-table">
+                        <thead>
+                            <tr>
+                                <th>Date/Time</th>
+                                <th>Action</th>
+                                <th>Field</th>
+                                <th>Old Value</th>
+                                <th>New Value</th>
+                                <th>Changed By</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditTableBody">
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Tab switching function
-        function showTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(tabName).classList.add('active');
-            document.querySelector(`[onclick="showTab('${tabName}')"]`).classList.add('active');
-        }
+        // Global app object to hold our functions and state
+        window.App = {
+            userPermissions: [],
+            gridApi: null,
+            columnApi: null,
+            currentItem: null,
+            activeTab: 'available',
+
+            // Column Definitions
+            availableColumnDefs: [
+                { 
+                    field: 'asset_tag', 
+                    headerName: 'Asset Tag',
+                    sortable: true,
+                    filter: true,
+                    resizable: true
+                },
+                { 
+                    field: 'asset_type',
+                    headerName: 'Asset Type',
+                    sortable: true,
+                    filter: true,
+                    resizable: true
+                },
+                { 
+                    field: 'model',
+                    headerName: 'Model',
+                    sortable: true,
+                    filter: true,
+                    resizable: true
+                },
+                { 
+                    field: 'serial_number',
+                    headerName: 'Serial Number',
+                    sortable: true,
+                    filter: true,
+                    resizable: true
+                },
+                {
+                    headerName: 'Actions',
+                    field: 'actions',
+                    sortable: false,
+                    filter: false,
+                    pinned: 'right',
+                    width: 120,
+                    cellRenderer: (params) => {
+                        const container = document.createElement('div');
+                        container.style.display = 'flex';
+                        container.style.gap = '5px';
+
+                        const detailsBtn = document.createElement('button');
+                        detailsBtn.innerHTML = 'Details';
+                        detailsBtn.classList.add('details-button');
+                        detailsBtn.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                            App.showDetails(params.data);
+                        });
+
+                        const checkoutBtn = document.createElement('button');
+                        checkoutBtn.innerHTML = 'Checkout';
+                        checkoutBtn.classList.add('checkout-button');
+                        checkoutBtn.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                            App.showCheckoutModal(params.data);
+                        });
+
+                        container.appendChild(detailsBtn);
+                        container.appendChild(checkoutBtn);
+                        return container;
+                    }
+                }
+            ],
+
+            checkedOutColumnDefs: [
+                { 
+                    field: 'asset_tag', 
+                    headerName: 'Asset Tag',
+                    sortable: true,
+                    filter: true,
+                    resizable: true
+                },
+                { 
+                    field: 'asset_type',
+                    headerName: 'Asset Type',
+                    sortable: true,
+                    filter: true,
+                    resizable: true
+                },
+                { 
+                    field: 'user_name',
+                    headerName: 'Checked Out To',
+                    sortable: true,
+                    filter: true,
+                    resizable: true
+                },
+                { 
+                    field: 'checkout_date',
+                    headerName: 'Checkout Date',
+                    sortable: true,
+                    filter: true,
+                    resizable: true
+                },
+                { 
+                    field: 'expected_return_date',
+                    headerName: 'Expected Return',
+                    sortable: true,
+                    filter: true,
+                    resizable: true
+                },
+                {
+                    headerName: 'Actions',
+                    field: 'actions',
+                    sortable: false,
+                    filter: false,
+                    pinned: 'right',
+                    width: 120,
+                    cellRenderer: (params) => {
+                        const container = document.createElement('div');
+                        container.style.display = 'flex';
+                        container.style.gap = '5px';
+
+                        const detailsBtn = document.createElement('button');
+                        detailsBtn.innerHTML = 'Details';
+                        detailsBtn.classList.add('details-button');
+                        detailsBtn.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                            App.showDetails(params.data);
+                        });
+
+                        const checkinBtn = document.createElement('button');
+                        checkinBtn.innerHTML = 'Check In';
+                        checkinBtn.classList.add('checkin-button');
+                        checkinBtn.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                            App.checkinDevice(params.data);
+                        });
+
+                        container.appendChild(detailsBtn);
+                        container.appendChild(checkinBtn);
+                        return container;
+                    }
+                }
+            ],
+
+            // Grid Options
+            gridOptions: {
+                defaultColDef: {
+                    flex: 1,
+                    minWidth: 100,
+                    resizable: true,
+                    sortable: true,
+                    filter: true
+                },
+                rowData: [],
+                pagination: false,
+                suppressRowClickSelection: true,
+                rowSelection: 'single',
+                onGridReady: (params) => {
+                    App.gridApi = params.api;
+                    App.columnApi = params.columnApi;
+                    
+                    const savedState = localStorage.getItem('loanerGridState');
+                    if (savedState) {
+                        App.columnApi.applyColumnState(JSON.parse(savedState));
+                    }
+                    
+                    App.loadData();
+                },
+                getRowHeight: () => 40
+            },
+
+            // Load data based on active tab
+            loadData: async function() {
+                try {
+                    const endpoint = this.activeTab === 'available' 
+                        ? '/api/loaners/available'
+                        : '/api/loaners/checked-out';
+                    
+                    const response = await fetch(endpoint);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    
+                    // Update grid with new data and columns
+                    this.gridApi.setColumnDefs(
+                        this.activeTab === 'available' 
+                            ? this.availableColumnDefs 
+                            : this.checkedOutColumnDefs
+                    );
+                    this.gridApi.setRowData(data);
+                } catch (error) {
+                    console.error('Error loading data:', error);
+                    alert('Error loading data');
+                }
+            },
+
+            // Show details modal
+            showDetails: function(item) {
+                this.currentItem = item;
+                
+                // Update details view
+                document.getElementById('detailAssetTag').textContent = item.asset_tag || '';
+                document.getElementById('detailAssetType').textContent = item.asset_type || '';
+                document.getElementById('detailModel').textContent = item.model || '';
+                document.getElementById('detailSerialNumber').textContent = item.serial_number || '';
+                document.getElementById('detailStatus').textContent = this.activeTab === 'available' ? 'Available' : 'Checked Out';
+                document.getElementById('detailCurrentUser').textContent = item.user_name || 'N/A';
+                document.getElementById('detailCheckoutDate').textContent = item.checkout_date ? new Date(item.checkout_date).toLocaleDateString() : 'N/A';
+                document.getElementById('detailExpectedReturn').textContent = item.expected_return_date ? new Date(item.expected_return_date).toLocaleDateString() : 'N/A';
+                document.getElementById('detailNotes').textContent = item.checkout_notes || '';
+                
+                // Show/hide action buttons based on status
+                document.getElementById('checkoutButton').style.display = this.activeTab === 'available' ? 'block' : 'none';
+                document.getElementById('checkinButton').style.display = this.activeTab === 'available' ? 'none' : 'block';
+                
+                // Show the details modal
+                document.getElementById('detailsModal').style.display = 'block';
+                
+                // Set up audit button click handler
+                document.getElementById('viewAuditButton').onclick = () => this.loadAuditLog(item.asset_tag);
+                
+                // Set up action button handlers
+                document.getElementById('checkoutButton').onclick = () => {
+                    document.getElementById('detailsModal').style.display = 'none';
+                    this.showCheckoutModal(item);
+                };
+                document.getElementById('checkinButton').onclick = () => this.checkinDevice(item);
+            },
+
+            // Show checkout modal
+            showCheckoutModal: function(item) {
+                this.currentItem = item;
+                document.getElementById('inventoryId').value = item.inventory_id;
+                
+                // Set minimum date to today
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('expectedReturnDate').min = today;
+                
+                document.getElementById('checkoutModal').style.display = 'block';
+            },
+
+            // Check in a device
+            checkinDevice: async function(item) {
+                if (!confirm('Are you sure you want to check in this device?')) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/loaners/checkin', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            checkout_id: item.checkout_id
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const data = await response.json();
+                        throw new Error(data.error || 'Failed to check in device');
+                    }
+
+                    alert('Device checked in successfully');
+                    document.getElementById('detailsModal').style.display = 'none';
+                    this.loadData();
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                }
+            },
+
+            // Load audit log
+            loadAuditLog: async function(assetTag) {
+                try {
+                    const response = await fetch(`/api/audit/${assetTag}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const auditEntries = await response.json();
+                    
+                    // Clear existing entries
+                    const tbody = document.getElementById('auditTableBody');
+                    tbody.innerHTML = '';
+                    
+                    // Add new entries
+                    auditEntries.forEach(entry => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${new Date(entry.changed_at).toLocaleString()}</td>
+                            <td>${entry.action_type}</td>
+                            <td>${entry.field_name}</td>
+                            <td>${entry.old_value || ''}</td>
+                            <td>${entry.new_value || ''}</td>
+                            <td>${entry.changed_by}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                    
+                    // Show the audit modal
+                    document.getElementById('auditModal').style.display = 'block';
+                } catch (error) {
+                    console.error('Error loading audit log:', error);
+                    alert('Error loading audit log');
+                }
+            },
+
+            // Initialize the application
+            init: function() {
+                const gridDiv = document.querySelector('#myGrid');
+                new agGrid.Grid(gridDiv, {
+                    ...this.gridOptions,
+                    columnDefs: this.availableColumnDefs
+                });
+
+                // Set up event listeners
+                this.setupEventListeners();
+            },
+
+            // Set up event listeners
+            setupEventListeners: function() {
+                // Tab switching
+                document.getElementById('availableTab').addEventListener('click', () => {
+                    this.activeTab = 'available';
+                    document.getElementById('availableTab').classList.add('active');
+                    document.getElementById('checkedOutTab').classList.remove('active');
+                    this.loadData();
+                });
+
+                document.getElementById('checkedOutTab').addEventListener('click', () => {
+                    this.activeTab = 'checked-out';
+                    document.getElementById('checkedOutTab').classList.add('active');
+                    document.getElementById('availableTab').classList.remove('active');
+                    this.loadData();
+                });
+
+                // Search functionality with debounce
+                let searchTimeout;
+                document.getElementById('searchInput').addEventListener('input', (e) => {
+                    if (searchTimeout) {
+                        clearTimeout(searchTimeout);
+                    }
+                    
+                    searchTimeout = setTimeout(() => {
+                        this.loadData();
+                    }, 300);
+                });
+
+                // Theme toggle
+                const themeToggle = document.getElementById('themeToggle');
+                const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+                const gridDiv = document.querySelector('#myGrid');
+                
+                const setTheme = (isDark) => {
+                    if (isDark) {
+                        document.body.setAttribute('data-theme', 'dark');
+                        themeToggle.innerHTML = '<span class="icon">🌜</span><span class="text">Dark Mode</span>';
+                        gridDiv.classList.remove('ag-theme-alpine');
+                        gridDiv.classList.add('ag-theme-alpine-dark');
+                    } else {
+                        document.body.removeAttribute('data-theme');
+                        themeToggle.innerHTML = '<span class="icon">🌞</span><span class="text">Light Mode</span>';
+                        gridDiv.classList.remove('ag-theme-alpine-dark');
+                        gridDiv.classList.add('ag-theme-alpine');
+                    }
+                    if (this.gridApi) {
+                        this.gridApi.redrawRows();
+                    }
+                };
+                
+                const savedTheme = localStorage.getItem('theme');
+                if (savedTheme === 'dark' || (!savedTheme && prefersDarkScheme.matches)) {
+                    setTheme(true);
+                }
+
+                themeToggle.addEventListener('click', () => {
+                    const isDark = document.body.hasAttribute('data-theme');
+                    setTheme(!isDark);
+                    localStorage.setItem('theme', !isDark ? 'dark' : 'light');
+                });
+
+                // Filter panel
+                const filterPanel = document.getElementById('filterPanel');
+                const toggleFilters = document.getElementById('toggleFilters');
+                toggleFilters.addEventListener('click', () => {
+                    filterPanel.classList.toggle('active');
+                    toggleFilters.textContent = filterPanel.classList.contains('active') ? 'Hide Filters' : 'Show Filters';
+                });
+
+                document.getElementById('applyFilters').addEventListener('click', () => {
+                    this.loadData();
+                });
+
+                document.getElementById('clearFilters').addEventListener('click', () => {
+                    document.querySelectorAll('.filter-group input').forEach(input => {
+                        input.value = '';
+                    });
+                    this.loadData();
+                });
+
+                // Modal close buttons
+                document.querySelectorAll('.close').forEach(closeBtn => {
+                    closeBtn.onclick = function() {
+                        this.closest('.modal, .details-modal').style.display = 'none';
+                    };
+                });
+
+                window.onclick = (event) => {
+                    if (event.target.classList.contains('modal') || event.target.classList.contains('details-modal')) {
+                        event.target.style.display = 'none';
+                    }
+                };
+
+                // Checkout form submission
+                document.getElementById('checkoutForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    const formData = {
+                        inventory_id: document.getElementById('inventoryId').value,
+                        user_name: document.getElementById('userName').value,
+                        expected_return_date: document.getElementById('expectedReturnDate').value,
+                        notes: document.getElementById('checkoutNotes').value || null
+                    };
+
+                    try {
+                        const response = await fetch('/api/loaners/checkout', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(formData)
+                        });
+
+                        if (!response.ok) {
+                            const data = await response.json();
+                            throw new Error(data.error || 'Failed to checkout device');
+                        }
+
+                        alert('Device checked out successfully');
+                        document.getElementById('checkoutForm').reset();
+                        document.getElementById('checkoutModal').style.display = 'none';
+                        this.loadData();
+                    } catch (error) {
+                        alert('Error: ' + error.message);
+                    }
+                });
+
+                // Layout buttons
+                document.getElementById('saveLayout').addEventListener('click', () => {
+                    const state = this.columnApi.getColumnState();
+                    localStorage.setItem('loanerGridState', JSON.stringify(state));
+                    alert('Layout saved successfully');
+                });
+
+                document.getElementById('resetLayout').addEventListener('click', () => {
+                    localStorage.removeItem('loanerGridState');
+                    this.columnApi.resetColumnState();
+                    alert('Layout reset to default');
+                });
+
+                // Load user info
+                fetch('/.auth/me')
+                    .then(response => response.json())
+                    .then(authData => {
+                        console.log('Auth data:', authData);
+                        if (authData && authData.length > 0 && authData[0].user_claims) {
+                            const nameClaim = authData[0].user_claims.find(claim => 
+                                claim.typ === 'name' || 
+                                claim.typ === 'preferred_username' ||
+                                claim.typ === 'email'
+                            );
+                            if (nameClaim) {
+                                document.getElementById('userName').textContent = nameClaim.val;
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching user info:', error);
+                        document.getElementById('userName').textContent = 'User';
+                    });
+
+                // Load user role
+                fetch('/api/user/role')
+                    .then(response => response.json())
+                    .then(roleData => {
+                        if (roleData && roleData.role) {
+                            document.getElementById('userRole').textContent = roleData.role.charAt(0).toUpperCase() + roleData.role.slice(1);
+                            this.userPermissions = roleData.permissions || [];
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching role:', error);
+                    });
+            }
+        };
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => App.init());
     </script>
-    <script src="/static/loaner.js"></script>
 </body>
 </html>

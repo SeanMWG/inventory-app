@@ -1,182 +1,153 @@
 from flask import Blueprint, jsonify, request
 from datetime import datetime
-import logging
-from utils import get_db_connection, log_audit, get_user_name
-from functools import wraps
+import pyodbc
+from utils import get_db_connection, log_change
 
-loaner_bp = Blueprint('loaner_bp', __name__)
+loaner_bp = Blueprint('loaner_routes', __name__)
 
-def role_required(permission):
-    """Decorator to require specific permission for a route"""
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            try:
-                from utils import has_permission
-                from flask import current_app
-                if not has_permission(permission, current_app.config):
-                    logging.warning(f"Permission denied: {permission}")
-                    return jsonify({
-                        'error': 'Permission denied',
-                        'required_permission': permission
-                    }), 403
-                return f(*args, **kwargs)
-            except Exception as e:
-                logging.error(f"Error in role_required decorator: {str(e)}")
-                logging.error(traceback.format_exc())
-                return jsonify({'error': 'Internal server error'}), 500
-        return decorated_function
-    return decorator
-
-@loaner_bp.route('/api/loaners/available', methods=['GET'])
-@role_required('view')
+@loaner_bp.route('/api/loaners/available')
 def get_available_loaners():
-    """Get list of available loaner items"""
+    """Get all available loaner devices"""
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM dbo.AvailableLoaners")
-            
-            # Get column names
-            columns = [column[0] for column in cursor.description]
-            
-            # Fetch and convert to list of dictionaries
-            items = []
-            for row in cursor.fetchall():
-                item = {}
-                for i, value in enumerate(row):
-                    # Convert datetime objects to ISO format strings
-                    if isinstance(value, datetime):
-                        value = value.isoformat()
-                    item[columns[i].lower()] = value
-                items.append(item)
-            
-            return jsonify(items)
-            
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM dbo.AvailableLoaners')
+        columns = [column[0] for column in cursor.description]
+        items = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        return jsonify(items)
     except Exception as e:
-        logging.error(f"Error getting available loaners: {str(e)}")
         return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
-@loaner_bp.route('/api/loaners/checked-out', methods=['GET'])
-@role_required('view')
+@loaner_bp.route('/api/loaners/checked-out')
 def get_checked_out_loaners():
-    """Get list of checked out loaner items"""
+    """Get all currently checked out loaner devices"""
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM dbo.CheckedOutLoaners")
-            
-            # Get column names
-            columns = [column[0] for column in cursor.description]
-            
-            # Fetch and convert to list of dictionaries
-            items = []
-            for row in cursor.fetchall():
-                item = {}
-                for i, value in enumerate(row):
-                    # Convert datetime objects to ISO format strings
-                    if isinstance(value, datetime):
-                        value = value.isoformat()
-                    item[columns[i].lower()] = value
-                items.append(item)
-            
-            return jsonify(items)
-            
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM dbo.CheckedOutLoaners')
+        columns = [column[0] for column in cursor.description]
+        items = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        return jsonify(items)
     except Exception as e:
-        logging.error(f"Error getting checked out loaners: {str(e)}")
         return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
 @loaner_bp.route('/api/loaners/checkout', methods=['POST'])
-@role_required('edit')
-def checkout_item():
-    """Check out a loaner item"""
+def checkout_loaner():
+    """Check out a loaner device"""
     try:
-        data = request.json
-        user_name = get_user_name()
+        data = request.get_json()
+        inventory_id = data.get('inventory_id')
+        user_name = data.get('user_name')
+        expected_return_date = data.get('expected_return_date')
+        notes = data.get('notes')
         
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
+        if not all([inventory_id, user_name]):
+            return jsonify({'error': 'Missing required fields'}), 400
             
-            # Insert checkout record
-            query = """
-            INSERT INTO dbo.LoanerCheckouts 
-            (inventory_id, user_name, expected_return_date, notes)
-            VALUES (?, ?, ?, ?);
-            """
-            
-            cursor.execute(query, (
-                data['inventory_id'],
-                data['user_name'],
-                data.get('expected_return_date'),
-                data.get('notes')
-            ))
-            
-            # Log the checkout
-            log_audit(cursor, 'CHECKOUT', None, 'loaner_status', 'available', 'checked_out', user_name)
-            
-            conn.commit()
-            return jsonify({'message': 'Item checked out successfully'}), 200
-            
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # First verify the item is available
+        cursor.execute('''
+            SELECT inventory_id FROM dbo.AvailableLoaners 
+            WHERE inventory_id = ?
+        ''', inventory_id)
+        
+        if not cursor.fetchone():
+            return jsonify({'error': 'Item is not available for checkout'}), 400
+        
+        # Create checkout record
+        cursor.execute('''
+            INSERT INTO dbo.LoanerCheckouts (
+                inventory_id, user_name, checkout_date, 
+                expected_return_date, checkout_notes
+            ) VALUES (?, ?, GETDATE(), ?, ?)
+        ''', (inventory_id, user_name, expected_return_date, notes))
+        
+        # Log the change
+        log_change(
+            cursor=cursor,
+            asset_tag=None,  # We'll get this from a subquery
+            action_type='CHECKOUT',
+            field_name='status',
+            old_value='available',
+            new_value='checked out',
+            changed_by=user_name
+        )
+        
+        conn.commit()
+        return jsonify({'message': 'Checkout successful'})
     except Exception as e:
-        logging.error(f"Error checking out item: {str(e)}")
-        return jsonify({'error': str(e)}), 400
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
 @loaner_bp.route('/api/loaners/checkin', methods=['POST'])
-@role_required('edit')
-def checkin_item():
-    """Check in a loaner item"""
+def checkin_loaner():
+    """Check in a loaner device"""
     try:
-        data = request.json
-        user_name = get_user_name()
+        data = request.get_json()
+        checkout_id = data.get('checkout_id')
         
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
+        if not checkout_id:
+            return jsonify({'error': 'Missing checkout_id'}), 400
             
-            # Update checkout record
-            query = """
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get checkout info before updating
+        cursor.execute('''
+            SELECT lc.inventory_id, lc.user_name, i.asset_tag
+            FROM dbo.LoanerCheckouts lc
+            JOIN dbo.Formatted_Company_Inventory i ON i.inventory_id = lc.inventory_id
+            WHERE lc.checkout_id = ? AND lc.checkin_date IS NULL
+        ''', checkout_id)
+        
+        result = cursor.fetchone()
+        if not result:
+            return jsonify({'error': 'Invalid checkout or already checked in'}), 400
+            
+        inventory_id, user_name, asset_tag = result
+        
+        # Update checkout record
+        cursor.execute('''
             UPDATE dbo.LoanerCheckouts 
             SET checkin_date = GETDATE()
-            WHERE checkout_id = ?;
-            """
-            
-            cursor.execute(query, (data['checkout_id'],))
-            
-            # Log the checkin
-            log_audit(cursor, 'CHECKIN', None, 'loaner_status', 'checked_out', 'available', user_name)
-            
-            conn.commit()
-            return jsonify({'message': 'Item checked in successfully'}), 200
-            
-    except Exception as e:
-        logging.error(f"Error checking in item: {str(e)}")
-        return jsonify({'error': str(e)}), 400
-
-@loaner_bp.route('/api/loaners/mark-as-loaner', methods=['POST'])
-@role_required('edit')
-def mark_as_loaner():
-    """Mark an inventory item as a loaner"""
-    try:
-        data = request.json
-        user_name = get_user_name()
+            WHERE checkout_id = ?
+        ''', checkout_id)
         
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Update inventory record
-            query = """
-            UPDATE dbo.Formatted_Company_Inventory 
-            SET is_loaner = 1
-            WHERE inventory_id = ?;
-            """
-            
-            cursor.execute(query, (data['inventory_id'],))
-            
-            # Log the change
-            log_audit(cursor, 'UPDATE', None, 'is_loaner', '0', '1', user_name)
-            
-            conn.commit()
-            return jsonify({'message': 'Item marked as loaner successfully'}), 200
-            
+        # Log the change
+        log_change(
+            cursor=cursor,
+            asset_tag=asset_tag,
+            action_type='CHECKIN',
+            field_name='status',
+            old_value='checked out',
+            new_value='available',
+            changed_by=user_name
+        )
+        
+        conn.commit()
+        return jsonify({'message': 'Check-in successful'})
     except Exception as e:
-        logging.error(f"Error marking item as loaner: {str(e)}")
-        return jsonify({'error': str(e)}), 400
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@loaner_bp.route('/loaners')
+def loaner_management():
+    """Render the loaner management page"""
+    from flask import render_template
+    return render_template('loaner_management.html')

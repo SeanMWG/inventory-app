@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT Hardware Inventory</title>
+    <link rel="stylesheet" href="static/styles.css">
+</head>
+<body>
+    <div class="top-buttons">
+        <button id="themeToggle" class="theme-toggle">
+            <span class="icon">🌞</span>
+            <span class="text">Light Mode</span>
+        </button>
+    </div>
+    <div class="container">
+        <h1>IT Hardware Inventory</h1>
+
+        <!-- Search Field -->
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="Search inventory...">
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button id="addHardwareBtn" class="action-button">Add New Hardware</button>
+            <div class="import-container">
+                <input type="file" id="excelFile" accept=".xlsx" style="display: none;">
+                <button id="importBtn" class="action-button">Import from Excel</button>
+                <div id="importStatus"></div>
+            </div>
+        </div>
+        
+        <!-- Modal Form -->
+        <div id="formModal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>Add New Hardware</h2>
+                <form id="hardwareForm">
+                    <div class="form-group">
+                        <label for="manufacturer">Manufacturer:</label>
+                        <input type="text" id="manufacturer" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="modelNumber">Model Number:</label>
+                        <input type="text" id="modelNumber" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="hardwareType">Hardware Type:</label>
+                        <input type="text" id="hardwareType" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="serialNumber">Serial/Service Tag Number:</label>
+                        <input type="text" id="serialNumber" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="assignedTo">Assigned To:</label>
+                        <input type="text" id="assignedTo">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="room_name">Room Name:</label>
+                        <input type="text" id="room_name">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dateAssigned">Date Assigned:</label>
+                        <input type="date" id="dateAssigned">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dateDecommissioned">Date Decommissioned:</label>
+                        <input type="date" id="dateDecommissioned">
+                    </div>
+                    
+                    <button type="submit">Add Hardware</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Hardware List -->
+        <div class="inventory-list">
+            <h2>Current Inventory</h2>
+            <div class="pagination">
+                <button id="prevPage" class="page-button">&lt; Previous</button>
+                <span id="pageInfo"></span>
+                <button id="nextPage" class="page-button">Next &gt;</button>
+            </div>
+            <table id="inventoryTable">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-sort="manufacturer">Manufacturer</th>
+                        <th class="sortable" data-sort="model">Model</th>
+                        <th class="sortable" data-sort="type">Type</th>
+                        <th class="sortable" data-sort="serial">Serial Number</th>
+                        <th class="sortable" data-sort="assigned">Assigned To</th>
+                        <th class="sortable" data-sort="room">Room Name</th>
+                        <th class="sortable" data-sort="dateAssigned">Date Assigned</th>
+                        <th class="sortable" data-sort="dateDecommissioned">Date Decommissioned</th>
+                    </tr>
+                </thead>
+                <tbody id="inventoryBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Modal controls
+        const modal = document.getElementById('formModal');
+        const btn = document.getElementById('addHardwareBtn');
+        const span = document.getElementsByClassName('close')[0];
+
+        btn.onclick = () => modal.style.display = 'block';
+        span.onclick = () => modal.style.display = 'none';
+        window.onclick = (event) => {
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // Excel import functionality
+        const importBtn = document.getElementById('importBtn');
+        const excelFile = document.getElementById('excelFile');
+        const importStatus = document.getElementById('importStatus');
+
+        importBtn.addEventListener('click', () => {
+            excelFile.click();
+        });
+
+        excelFile.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/import', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                let result;
+                try {
+                    const text = await response.text();
+                    result = text ? JSON.parse(text) : {};
+                } catch (e) {
+                    console.error('Error parsing response:', e, 'Response text:', text);
+                    throw new Error('Invalid server response');
+                }
+                
+                if (response.ok) {
+                    importStatus.className = 'success';
+                    importStatus.textContent = result.message;
+                    if (result.errors && result.errors.length > 0) {
+                        importStatus.textContent += '\nErrors:\n' + result.errors.join('\n');
+                    }
+                    loadInventory(); // Refresh the table
+                } else {
+                    importStatus.className = 'error';
+                    const errorMessage = result.error || 'Import failed';
+                    importStatus.innerHTML = `Error: ${errorMessage}<br>Please check:<br>1. File is .xlsx format<br>2. Required columns are present (manufacturer, model_number, hardware_type, serial_number)<br>3. Column names match exactly`;
+                }
+            } catch (error) {
+                importStatus.className = 'error';
+                importStatus.textContent = 'Error: ' + (error.message || 'Failed to process file');
+                console.error('Import error:', error);
+            }
+
+            importStatus.style.display = 'block';
+            // Keep error messages visible longer
+            if (importStatus.className === 'error') {
+                setTimeout(() => {
+                    importStatus.style.display = 'none';
+                }, 15000);  // 15 seconds for errors
+            } else {
+                setTimeout(() => {
+                    importStatus.style.display = 'none';
+                }, 5000);   // 5 seconds for success
+            }
+
+            // Reset file input
+            e.target.value = '';
+        });
+
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const rows = document.getElementById('inventoryBody').getElementsByTagName('tr');
+            
+            Array.from(rows).forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        });
+
+        // Form submission
+        document.getElementById('hardwareForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                manufacturer: document.getElementById('manufacturer').value,
+                model_number: document.getElementById('modelNumber').value,
+                hardware_type: document.getElementById('hardwareType').value,
+                serial_number: document.getElementById('serialNumber').value,
+                assigned_to: document.getElementById('assignedTo').value,
+                room_name: document.getElementById('room_name').value,
+                date_assigned: document.getElementById('dateAssigned').value || null,
+                date_decommissioned: document.getElementById('dateDecommissioned').value || null
+            };
+
+            try {
+                const response = await fetch('/api/hardware', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    alert('Hardware added successfully!');
+                    document.getElementById('hardwareForm').reset();
+                    loadInventory();
+                } else {
+                    const data = await response.json();
+                    alert('Error: ' + (data.error || 'Failed to add hardware'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+
+        // Load inventory data
+        let currentPage = 1;
+
+        async function loadInventory(page = 1) {
+            try {
+                console.log("Fetching inventory data...");
+                const response = await fetch(`/api/hardware?page=${page}`);
+                console.log("Response status:", response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const text = await response.text();
+                console.log("Response text:", text);
+                
+                const data = text ? JSON.parse(text) : { items: [] };
+                console.log("Parsed data:", data);
+                
+                const tbody = document.getElementById('inventoryBody');
+                tbody.innerHTML = '';
+                
+                if (Array.isArray(data.items)) {
+                    data.items.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.manufacturer}</td>
+                        <td>${item.model_number}</td>
+                        <td>${item.hardware_type}</td>
+                        <td>${item.serial_number}</td>
+                        <td>${item.assigned_to || ''}</td>
+                        <td>${item.room_name || ''}</td>
+                        <td>${item.date_assigned ? new Date(item.date_assigned).toLocaleDateString() : ''}</td>
+                        <td>${item.date_decommissioned ? new Date(item.date_decommissioned).toLocaleDateString() : ''}</td>
+                    `;
+                    tbody.appendChild(row);
+                    });
+
+                    // Update pagination controls
+                    document.getElementById('pageInfo').textContent = 
+                        `Page ${data.current_page} of ${data.total_pages} (${data.total_items} items)`;
+                    
+                    document.getElementById('prevPage').disabled = data.current_page <= 1;
+                    document.getElementById('nextPage').disabled = data.current_page >= data.total_pages;
+                    
+                    currentPage = data.current_page;
+                } else if (data.error) {
+                    console.error('Server error:', data.error);
+                    alert('Error loading inventory: ' + data.error);
+                } else {
+                    console.error('Unexpected data format:', data);
+                    alert('Error: Unexpected data format received from server');
+                }
+            } catch (error) {
+                console.error('Error loading inventory:', error);
+                alert('Error loading inventory: ' + error.message);
+            }
+        }
+
+        // Sorting functionality
+        let currentSort = {
+            column: null,
+            direction: 'asc'
+        };
+
+        function sortTable(column) {
+            const tbody = document.getElementById('inventoryBody');
+            const rows = Array.from(tbody.getElementsByTagName('tr'));
+            
+            // Toggle sort direction if clicking the same column
+            if (currentSort.column === column) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = column;
+                currentSort.direction = 'asc';
+            }
+
+            // Sort the rows
+            rows.sort((a, b) => {
+                let aValue = a.getElementsByTagName('td')[getColumnIndex(column)].textContent;
+                let bValue = b.getElementsByTagName('td')[getColumnIndex(column)].textContent;
+
+                // Handle date sorting
+                if (column === 'dateAssigned' || column === 'dateDecommissioned') {
+                    aValue = aValue ? new Date(aValue) : new Date(0);
+                    bValue = bValue ? new Date(bValue) : new Date(0);
+                }
+
+                if (aValue < bValue) return currentSort.direction === 'asc' ? -1 : 1;
+                if (aValue > bValue) return currentSort.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            // Reorder the table
+            rows.forEach(row => tbody.appendChild(row));
+
+            // Update sort indicators
+            document.querySelectorAll('th.sortable').forEach(th => {
+                const sortColumn = th.getAttribute('data-sort');
+                // Remove all sort indicators first
+                th.textContent = th.textContent.replace(/[↑↓↕]$/, '').trim();
+                // Add the appropriate indicator
+                if (sortColumn === column) {
+                    th.textContent += currentSort.direction === 'asc' ? ' ↑' : ' ↓';
+                } else {
+                    th.textContent += ' ↕';
+                }
+            });
+        }
+
+        function getColumnIndex(column) {
+            const columns = {
+                'manufacturer': 0,
+                'model': 1,
+                'type': 2,
+                'serial': 3,
+                'assigned': 4,
+                'room': 5,
+                'dateAssigned': 6,
+                'dateDecommissioned': 7
+            };
+            return columns[column];
+        }
+
+        // Add click handlers to sortable columns
+        document.querySelectorAll('th.sortable').forEach(th => {
+            th.addEventListener('click', () => {
+                sortTable(th.getAttribute('data-sort'));
+            });
+            th.style.cursor = 'pointer';
+        });
+
+        // Theme toggle functionality
+        const themeToggle = document.getElementById('themeToggle');
+        const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+        
+        // Set initial theme based on system preference
+        if (prefersDarkScheme.matches) {
+            document.body.setAttribute('data-theme', 'dark');
+            themeToggle.innerHTML = '<span class="icon">🌜</span><span class="text">Dark Mode</span>';
+        }
+
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = document.body.getAttribute('data-theme');
+            if (currentTheme === 'dark') {
+                document.body.removeAttribute('data-theme');
+                themeToggle.innerHTML = '<span class="icon">🌞</span><span class="text">Light Mode</span>';
+            } else {
+                document.body.setAttribute('data-theme', 'dark');
+                themeToggle.innerHTML = '<span class="icon">🌜</span><span class="text">Dark Mode</span>';
+            }
+        });
+
+        // Pagination event listeners
+        document.getElementById('prevPage').addEventListener('click', () => {
+            if (currentPage > 1) {
+                loadInventory(currentPage - 1);
+            }
+        });
+
+        document.getElementById('nextPage').addEventListener('click', () => {
+            loadInventory(currentPage + 1);
+        });
+
+        // Load first page on init
+        loadInventory(1);
+    </script>
+</body>
+</html>

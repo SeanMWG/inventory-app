@@ -1,0 +1,516 @@
+2025-01-23 08:53:07,283 - INFO - Starting database updates for loaner tracking
+2025-01-23 08:53:07,284 - ERROR - Failed to apply database changes: DATABASE_URL environment variable is not set
+2025-01-23 09:04:48,227 - INFO - Starting database updates for loaner tracking
+2025-01-23 09:04:48,228 - ERROR - Failed to apply database changes: DATABASE_URL environment variable is not set
+2025-01-23 09:06:54,228 - INFO - Starting database updates for loaner tracking
+2025-01-23 09:06:54,228 - INFO - Attempting database connection
+2025-01-23 09:06:54,229 - ERROR - Database connection failed: DATABASE_URL is not set in config.py
+2025-01-23 09:06:54,229 - ERROR - Failed to apply database changes: name 'traceback' is not defined
+2025-01-23 09:08:43,825 - INFO - Starting database updates for loaner tracking
+2025-01-23 09:08:43,825 - INFO - Attempting database connection
+2025-01-23 09:08:43,825 - ERROR - Database connection failed: DATABASE_URL environment variable is not set
+2025-01-23 09:08:43,827 - ERROR - Traceback (most recent call last):
+  File "C:\Users\sean.wilkinson\OneDrive - Morgan White Group\inventory-app\apply_loaner_changes.py", line 27, in get_db_connection
+    raise Exception("DATABASE_URL environment variable is not set")
+Exception: DATABASE_URL environment variable is not set
+
+2025-01-23 09:08:43,828 - ERROR - Failed to apply database changes: DATABASE_URL environment variable is not set
+2025-01-23 09:10:39,198 - INFO - Starting database updates for loaner tracking
+2025-01-23 09:10:39,199 - INFO - Attempting database connection
+2025-01-23 09:10:39,199 - INFO - Connection details:
+2025-01-23 09:10:39,199 - INFO -   Driver={ODBC Driver 18 for SQL Server}
+2025-01-23 09:10:39,199 - INFO -   Server=tcp:inventory-sql-server-sean.database.windows.net,1433
+2025-01-23 09:10:39,199 - INFO -   Database=inventory-db
+2025-01-23 09:10:39,199 - INFO -   Uid=sqladmin
+2025-01-23 09:10:39,199 - INFO -   Encrypt=yes
+2025-01-23 09:10:39,199 - INFO -   TrustServerCertificate=no
+2025-01-23 09:10:39,199 - INFO -   Connection Timeout=30
+2025-01-23 09:10:39,206 - ERROR - PyODBC Error: ('IM002', '[IM002] [Microsoft][ODBC Driver Manager] Data source name not found and no default driver specified (0) (SQLDriverConnect)')
+2025-01-23 09:10:39,206 - ERROR - Connection string (sanitized): Driver={ODBC Driver 18 for SQL Server};Server=tcp:inventory-sql-server-sean.database.windows.net,1433;Database=inventory-db;Uid=sqladmin;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30
+2025-01-23 09:10:39,209 - ERROR - Traceback (most recent call last):
+  File "C:\Users\sean.wilkinson\OneDrive - Morgan White Group\inventory-app\apply_loaner_changes.py", line 36, in get_db_connection
+    conn = pyodbc.connect(db_connection)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pyodbc.InterfaceError: ('IM002', '[IM002] [Microsoft][ODBC Driver Manager] Data source name not found and no default driver specified (0) (SQLDriverConnect)')
+
+2025-01-23 09:10:39,209 - ERROR - Failed to apply database changes: ('IM002', '[IM002] [Microsoft][ODBC Driver Manager] Data source name not found and no default driver specified (0) (SQLDriverConnect)')
+2025-01-23 09:12:38,606 - INFO - Starting database updates for loaner tracking
+2025-01-23 09:12:38,606 - INFO - Attempting database connection
+2025-01-23 09:12:38,607 - INFO - Connection details:
+2025-01-23 09:12:38,607 - INFO -   Driver={ODBC Driver 17 for SQL Server}
+2025-01-23 09:12:38,607 - INFO -   Server=tcp:inventory-sql-server-sean.database.windows.net,1433
+2025-01-23 09:12:38,607 - INFO -   Database=inventory-db
+2025-01-23 09:12:38,607 - INFO -   Uid=sqladmin
+2025-01-23 09:12:38,607 - INFO -   Encrypt=yes
+2025-01-23 09:12:38,608 - INFO -   TrustServerCertificate=no
+2025-01-23 09:12:38,608 - INFO -   Connection Timeout=30
+2025-01-23 09:12:39,759 - INFO - Database connection successful
+2025-01-23 09:12:39,760 - INFO - Executing SQL command:
+-- Add loaner tracking capability
+-- Step 1: Add is_loaner flag to main inventory table
+IF NOT EXISTS (
+    SELECT 1 
+    FROM sys.columns 
+    WHERE object_id = OBJECT_ID('dbo.Formatted_Company_Inventory')
+    AND name = 'is_loaner'
+)
+BEGIN
+    ALTER TABLE dbo.Formatted_Company_Inventory
+    ADD is_loaner BIT NOT NULL DEFAULT 0;
+END;
+
+-- Step 2: Create equipment loans table
+IF NOT EXISTS (
+    SELECT 1 
+    FROM sys.objects 
+    WHERE object_id = OBJECT_ID('dbo.Equipment_Loans')
+    AND type = 'U'
+)
+BEGIN
+    CREATE TABLE dbo.Equipment_Loans (
+        loan_id BIGINT IDENTITY(1,1) PRIMARY KEY,
+        asset_tag VARCHAR(100) NOT NULL,
+        loaned_to VARCHAR(255) NOT NULL,
+        checkout_date DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+        expected_return_date DATETIME2 NOT NULL,
+        actual_return_date DATETIME2 NULL,
+        checkout_notes NVARCHAR(MAX) NULL,
+        return_notes NVARCHAR(MAX) NULL,
+        checked_out_by VARCHAR(255) NOT NULL,
+        checked_in_by VARCHAR(255) NULL,
+        CONSTRAINT FK_EquipmentLoans_Inventory 
+            FOREIGN KEY (asset_tag) 
+            REFERENCES dbo.Formatted_Company_Inventory(asset_tag)
+            ON DELETE NO ACTION
+            ON UPDATE NO ACTION
+    );
+
+    -- Add index for performance
+    CREATE INDEX IX_EquipmentLoans_AssetTag 
+    ON dbo.Equipment_Loans(asset_tag);
+
+    CREATE INDEX IX_EquipmentLoans_Status 
+    ON dbo.Equipment_Loans(actual_return_date)
+    INCLUDE (asset_tag, expected_return_date);
+END;
+
+-- Step 3: Add view for active loans
+IF EXISTS (
+    SELECT 1 
+    FROM sys.views 
+    WHERE object_id = OBJECT_ID('dbo.Active_Loans')
+)
+    DROP VIEW dbo.Active_Loans;
+2025-01-23 09:12:39,859 - ERROR - Error executing SQL: ('42000', "[42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]There are no primary or candidate keys in the referenced table 'dbo.Formatted_Company_Inventory' that match the referencing column list in the foreign key 'FK_EquipmentLoans_Inventory'. (1776) (SQLExecDirectW); [42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Could not create constraint or index. See previous errors. (1750)")
+2025-01-23 09:12:39,872 - ERROR - Traceback (most recent call last):
+  File "C:\Users\sean.wilkinson\OneDrive - Morgan White Group\inventory-app\apply_loaner_changes.py", line 62, in execute_sql_safely
+    cursor.execute(cmd)
+pyodbc.ProgrammingError: ('42000', "[42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]There are no primary or candidate keys in the referenced table 'dbo.Formatted_Company_Inventory' that match the referencing column list in the foreign key 'FK_EquipmentLoans_Inventory'. (1776) (SQLExecDirectW); [42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Could not create constraint or index. See previous errors. (1750)")
+
+2025-01-23 09:12:39,873 - ERROR - Failed to apply database changes: ('42000', "[42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]There are no primary or candidate keys in the referenced table 'dbo.Formatted_Company_Inventory' that match the referencing column list in the foreign key 'FK_EquipmentLoans_Inventory'. (1776) (SQLExecDirectW); [42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Could not create constraint or index. See previous errors. (1750)")
+2025-01-23 09:15:56,885 - INFO - Starting database updates for loaner tracking
+2025-01-23 09:15:56,886 - INFO - Attempting database connection
+2025-01-23 09:15:56,886 - ERROR - Database connection failed: DATABASE_URL environment variable is not set
+2025-01-23 09:15:56,888 - ERROR - Traceback (most recent call last):
+  File "C:\Users\sean.wilkinson\OneDrive - Morgan White Group\inventory-app\apply_loaner_changes.py", line 27, in get_db_connection
+    raise Exception("DATABASE_URL environment variable is not set")
+Exception: DATABASE_URL environment variable is not set
+
+2025-01-23 09:15:56,888 - ERROR - Failed to apply database changes: DATABASE_URL environment variable is not set
+2025-01-23 09:16:12,524 - INFO - Starting database updates for loaner tracking
+2025-01-23 09:16:12,525 - INFO - Attempting database connection
+2025-01-23 09:16:12,525 - INFO - Connection details:
+2025-01-23 09:16:12,525 - INFO -   Driver={ODBC Driver 17 for SQL Server}
+2025-01-23 09:16:12,526 - INFO -   Server=tcp:inventory-sql-server-sean.database.windows.net,1433
+2025-01-23 09:16:12,526 - INFO -   Database=inventory-db
+2025-01-23 09:16:12,526 - INFO -   Uid=sqladmin
+2025-01-23 09:16:12,526 - INFO -   Encrypt=yes
+2025-01-23 09:16:12,526 - INFO -   TrustServerCertificate=no
+2025-01-23 09:16:12,526 - INFO -   Connection Timeout=30
+2025-01-23 09:16:13,158 - INFO - Database connection successful
+2025-01-23 09:16:13,159 - INFO - Executing SQL command:
+-- Add loaner tracking capability
+-- Step 1: Add primary key constraint to asset_tag
+IF NOT EXISTS (
+    SELECT 1 
+    FROM sys.indexes 
+    WHERE object_id = OBJECT_ID('dbo.Formatted_Company_Inventory')
+    AND name = 'PK_Formatted_Company_Inventory'
+)
+BEGIN
+    ALTER TABLE dbo.Formatted_Company_Inventory
+    ALTER COLUMN asset_tag VARCHAR(100) NOT NULL;
+    
+    ALTER TABLE dbo.Formatted_Company_Inventory
+    ADD CONSTRAINT PK_Formatted_Company_Inventory PRIMARY KEY (asset_tag);
+END;
+
+-- Step 2: Add is_loaner flag to main inventory table
+IF NOT EXISTS (
+    SELECT 1 
+    FROM sys.columns 
+    WHERE object_id = OBJECT_ID('dbo.Formatted_Company_Inventory')
+    AND name = 'is_loaner'
+)
+BEGIN
+    ALTER TABLE dbo.Formatted_Company_Inventory
+    ADD is_loaner BIT NOT NULL DEFAULT 0;
+END;
+
+-- Step 3: Create equipment loans table
+IF NOT EXISTS (
+    SELECT 1 
+    FROM sys.objects 
+    WHERE object_id = OBJECT_ID('dbo.Equipment_Loans')
+    AND type = 'U'
+)
+BEGIN
+    CREATE TABLE dbo.Equipment_Loans (
+        loan_id BIGINT IDENTITY(1,1) PRIMARY KEY,
+        asset_tag VARCHAR(100) NOT NULL,
+        loaned_to VARCHAR(255) NOT NULL,
+        checkout_date DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+        expected_return_date DATETIME2 NOT NULL,
+        actual_return_date DATETIME2 NULL,
+        checkout_notes NVARCHAR(MAX) NULL,
+        return_notes NVARCHAR(MAX) NULL,
+        checked_out_by VARCHAR(255) NOT NULL,
+        checked_in_by VARCHAR(255) NULL,
+        CONSTRAINT FK_EquipmentLoans_Inventory 
+            FOREIGN KEY (asset_tag) 
+            REFERENCES dbo.Formatted_Company_Inventory(asset_tag)
+            ON DELETE NO ACTION
+            ON UPDATE NO ACTION
+    );
+
+    -- Add index for performance
+    CREATE INDEX IX_EquipmentLoans_AssetTag 
+    ON dbo.Equipment_Loans(asset_tag);
+
+    CREATE INDEX IX_EquipmentLoans_Status 
+    ON dbo.Equipment_Loans(actual_return_date)
+    INCLUDE (asset_tag, expected_return_date);
+END;
+
+-- Step 4: Add view for active loans
+IF EXISTS (
+    SELECT 1 
+    FROM sys.views 
+    WHERE object_id = OBJECT_ID('dbo.Active_Loans')
+)
+    DROP VIEW dbo.Active_Loans;
+2025-01-23 09:16:13,227 - ERROR - Error executing SQL: ('42000', "[42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot define PRIMARY KEY constraint on nullable column in table 'Formatted_Company_Inventory'. (8111) (SQLExecDirectW); [42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Could not create constraint or index. See previous errors. (1750)")
+2025-01-23 09:16:13,231 - ERROR - Traceback (most recent call last):
+  File "C:\Users\sean.wilkinson\OneDrive - Morgan White Group\inventory-app\apply_loaner_changes.py", line 62, in execute_sql_safely
+    cursor.execute(cmd)
+pyodbc.ProgrammingError: ('42000', "[42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot define PRIMARY KEY constraint on nullable column in table 'Formatted_Company_Inventory'. (8111) (SQLExecDirectW); [42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Could not create constraint or index. See previous errors. (1750)")
+
+2025-01-23 09:16:13,231 - ERROR - Failed to apply database changes: ('42000', "[42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot define PRIMARY KEY constraint on nullable column in table 'Formatted_Company_Inventory'. (8111) (SQLExecDirectW); [42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Could not create constraint or index. See previous errors. (1750)")
+2025-01-23 09:17:37,154 - INFO - Starting database updates for loaner tracking
+2025-01-23 09:17:37,154 - INFO - Attempting database connection
+2025-01-23 09:17:37,154 - INFO - Connection details:
+2025-01-23 09:17:37,155 - INFO -   Driver={ODBC Driver 17 for SQL Server}
+2025-01-23 09:17:37,155 - INFO -   Server=tcp:inventory-sql-server-sean.database.windows.net,1433
+2025-01-23 09:17:37,155 - INFO -   Database=inventory-db
+2025-01-23 09:17:37,155 - INFO -   Uid=sqladmin
+2025-01-23 09:17:37,155 - INFO -   Encrypt=yes
+2025-01-23 09:17:37,155 - INFO -   TrustServerCertificate=no
+2025-01-23 09:17:37,156 - INFO -   Connection Timeout=30
+2025-01-23 09:17:37,844 - INFO - Database connection successful
+2025-01-23 09:17:37,845 - INFO - Executing SQL command:
+-- Add loaner tracking capability
+-- Step 1: Check for NULL values in asset_tag
+IF EXISTS (
+    SELECT 1 
+    FROM dbo.Formatted_Company_Inventory 
+    WHERE asset_tag IS NULL
+)
+BEGIN
+    RAISERROR ('Cannot proceed: NULL values found in asset_tag column. Please update these records first.', 16, 1);
+    RETURN;
+END;
+
+-- Step 2: Add primary key constraint to asset_tag
+IF NOT EXISTS (
+    SELECT 1 
+    FROM sys.indexes 
+    WHERE object_id = OBJECT_ID('dbo.Formatted_Company_Inventory')
+    AND name = 'PK_Formatted_Company_Inventory'
+)
+BEGIN
+    -- First update any empty strings to NULL
+    UPDATE dbo.Formatted_Company_Inventory
+    SET asset_tag = NULL
+    WHERE asset_tag = '';
+    
+    -- Check for duplicates
+    IF EXISTS (
+        SELECT asset_tag
+        FROM dbo.Formatted_Company_Inventory
+        WHERE asset_tag IS NOT NULL
+        GROUP BY asset_tag
+        HAVING COUNT(*) > 1
+    )
+    BEGIN
+        RAISERROR ('Cannot proceed: Duplicate asset_tag values found. Please fix duplicates first.', 16, 1);
+        RETURN;
+    END;
+    
+    -- Now make it NOT NULL and add the primary key
+    ALTER TABLE dbo.Formatted_Company_Inventory
+    ALTER COLUMN asset_tag VARCHAR(100) NOT NULL;
+    
+    ALTER TABLE dbo.Formatted_Company_Inventory
+    ADD CONSTRAINT PK_Formatted_Company_Inventory PRIMARY KEY (asset_tag);
+END;
+
+-- Step 3: Add is_loaner flag to main inventory table
+IF NOT EXISTS (
+    SELECT 1 
+    FROM sys.columns 
+    WHERE object_id = OBJECT_ID('dbo.Formatted_Company_Inventory')
+    AND name = 'is_loaner'
+)
+BEGIN
+    ALTER TABLE dbo.Formatted_Company_Inventory
+    ADD is_loaner BIT NOT NULL DEFAULT 0;
+END;
+
+-- Step 4: Create equipment loans table
+IF NOT EXISTS (
+    SELECT 1 
+    FROM sys.objects 
+    WHERE object_id = OBJECT_ID('dbo.Equipment_Loans')
+    AND type = 'U'
+)
+BEGIN
+    CREATE TABLE dbo.Equipment_Loans (
+        loan_id BIGINT IDENTITY(1,1) PRIMARY KEY,
+        asset_tag VARCHAR(100) NOT NULL,
+        loaned_to VARCHAR(255) NOT NULL,
+        checkout_date DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+        expected_return_date DATETIME2 NOT NULL,
+        actual_return_date DATETIME2 NULL,
+        checkout_notes NVARCHAR(MAX) NULL,
+        return_notes NVARCHAR(MAX) NULL,
+        checked_out_by VARCHAR(255) NOT NULL,
+        checked_in_by VARCHAR(255) NULL,
+        CONSTRAINT FK_EquipmentLoans_Inventory 
+            FOREIGN KEY (asset_tag) 
+            REFERENCES dbo.Formatted_Company_Inventory(asset_tag)
+            ON DELETE NO ACTION
+            ON UPDATE NO ACTION
+    );
+
+    -- Add index for performance
+    CREATE INDEX IX_EquipmentLoans_AssetTag 
+    ON dbo.Equipment_Loans(asset_tag);
+
+    CREATE INDEX IX_EquipmentLoans_Status 
+    ON dbo.Equipment_Loans(actual_return_date)
+    INCLUDE (asset_tag, expected_return_date);
+END;
+
+-- Step 5: Add view for active loans
+IF EXISTS (
+    SELECT 1 
+    FROM sys.views 
+    WHERE object_id = OBJECT_ID('dbo.Active_Loans')
+)
+    DROP VIEW dbo.Active_Loans;
+2025-01-23 09:17:37,932 - ERROR - Error executing SQL: ('42000', "[42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot define PRIMARY KEY constraint on nullable column in table 'Formatted_Company_Inventory'. (8111) (SQLExecDirectW); [42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Could not create constraint or index. See previous errors. (1750)")
+2025-01-23 09:17:37,936 - ERROR - Traceback (most recent call last):
+  File "C:\Users\sean.wilkinson\OneDrive - Morgan White Group\inventory-app\apply_loaner_changes.py", line 62, in execute_sql_safely
+    cursor.execute(cmd)
+pyodbc.ProgrammingError: ('42000', "[42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot define PRIMARY KEY constraint on nullable column in table 'Formatted_Company_Inventory'. (8111) (SQLExecDirectW); [42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Could not create constraint or index. See previous errors. (1750)")
+
+2025-01-23 09:17:37,937 - ERROR - Failed to apply database changes: ('42000', "[42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot define PRIMARY KEY constraint on nullable column in table 'Formatted_Company_Inventory'. (8111) (SQLExecDirectW); [42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Could not create constraint or index. See previous errors. (1750)")
+2025-01-23 09:20:32,491 - INFO - Starting database updates for loaner tracking
+2025-01-23 09:20:32,492 - INFO - Attempting database connection
+2025-01-23 09:20:32,492 - INFO - Connection details:
+2025-01-23 09:20:32,492 - INFO -   Driver={ODBC Driver 17 for SQL Server}
+2025-01-23 09:20:32,492 - INFO -   Server=tcp:inventory-sql-server-sean.database.windows.net,1433
+2025-01-23 09:20:32,492 - INFO -   Database=inventory-db
+2025-01-23 09:20:32,493 - INFO -   Uid=sqladmin
+2025-01-23 09:20:32,493 - INFO -   Encrypt=yes
+2025-01-23 09:20:32,493 - INFO -   TrustServerCertificate=no
+2025-01-23 09:20:32,493 - INFO -   Connection Timeout=30
+2025-01-23 09:20:33,414 - INFO - Database connection successful
+2025-01-23 09:20:33,415 - INFO - Executing SQL command:
+-- Add loaner tracking capability
+SET NOCOUNT ON;
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    -- Step 1: Check for NULL values in asset_tag
+    DECLARE @NullCount int;
+    SELECT @NullCount = COUNT(*) 
+    FROM dbo.Formatted_Company_Inventory 
+    WHERE asset_tag IS NULL OR asset_tag = '';
+
+    IF @NullCount > 0
+    BEGIN
+        ROLLBACK;
+        RAISERROR ('Cannot proceed: Found %d records with NULL or empty asset_tag values. Please update these records first.', 16, 1, @NullCount);
+        RETURN;
+    END;
+
+    -- Step 2: Check for duplicates
+    DECLARE @DuplicateCount int;
+    SELECT @DuplicateCount = COUNT(*) 
+    FROM (
+        SELECT asset_tag
+        FROM dbo.Formatted_Company_Inventory
+        WHERE asset_tag IS NOT NULL
+        GROUP BY asset_tag
+        HAVING COUNT(*) > 1
+    ) AS Duplicates;
+
+    IF @DuplicateCount > 0
+    BEGIN
+        ROLLBACK;
+        RAISERROR ('Cannot proceed: Found %d duplicate asset_tag values. Please fix duplicates first.', 16, 1, @DuplicateCount);
+        RETURN;
+    END;
+
+    -- Step 3: Add primary key constraint to asset_tag if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM sys.indexes 
+        WHERE object_id = OBJECT_ID('dbo.Formatted_Company_Inventory')
+        AND name = 'PK_Formatted_Company_Inventory'
+    )
+    BEGIN
+        -- Make it NOT NULL first
+        ALTER TABLE dbo.Formatted_Company_Inventory
+        ALTER COLUMN asset_tag VARCHAR(100) NOT NULL;
+        
+        -- Then add the primary key
+        ALTER TABLE dbo.Formatted_Company_Inventory
+        ADD CONSTRAINT PK_Formatted_Company_Inventory PRIMARY KEY (asset_tag);
+    END;
+
+    COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK;
+    THROW;
+END CATCH;
+
+-- Step 4: Add is_loaner flag in a separate transaction
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM sys.columns 
+        WHERE object_id = OBJECT_ID('dbo.Formatted_Company_Inventory')
+        AND name = 'is_loaner'
+    )
+    BEGIN
+        ALTER TABLE dbo.Formatted_Company_Inventory
+        ADD is_loaner BIT NOT NULL DEFAULT 0;
+    END;
+
+    COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK;
+    THROW;
+END CATCH;
+
+-- Step 5: Create equipment loans table in a separate transaction
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM sys.objects 
+        WHERE object_id = OBJECT_ID('dbo.Equipment_Loans')
+        AND type = 'U'
+    )
+    BEGIN
+        CREATE TABLE dbo.Equipment_Loans (
+            loan_id BIGINT IDENTITY(1,1) PRIMARY KEY,
+            asset_tag VARCHAR(100) NOT NULL,
+            loaned_to VARCHAR(255) NOT NULL,
+            checkout_date DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+            expected_return_date DATETIME2 NOT NULL,
+            actual_return_date DATETIME2 NULL,
+            checkout_notes NVARCHAR(MAX) NULL,
+            return_notes NVARCHAR(MAX) NULL,
+            checked_out_by VARCHAR(255) NOT NULL,
+            checked_in_by VARCHAR(255) NULL,
+            CONSTRAINT FK_EquipmentLoans_Inventory 
+                FOREIGN KEY (asset_tag) 
+                REFERENCES dbo.Formatted_Company_Inventory(asset_tag)
+                ON DELETE NO ACTION
+                ON UPDATE NO ACTION
+        );
+
+        -- Add indexes for performance
+        CREATE INDEX IX_EquipmentLoans_AssetTag 
+        ON dbo.Equipment_Loans(asset_tag);
+
+        CREATE INDEX IX_EquipmentLoans_Status 
+        ON dbo.Equipment_Loans(actual_return_date)
+        INCLUDE (asset_tag, expected_return_date);
+    END;
+
+    COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK;
+    THROW;
+END CATCH;
+
+-- Step 6: Create view in a separate transaction
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    IF EXISTS (
+        SELECT 1 
+        FROM sys.views 
+        WHERE object_id = OBJECT_ID('dbo.Active_Loans')
+    )
+    BEGIN
+        DROP VIEW dbo.Active_Loans;
+    END;
+
+    EXEC('CREATE VIEW dbo.Active_Loans AS
+    SELECT 
+        l.loan_id,
+        l.asset_tag,
+        i.asset_type,
+        i.model,
+        i.serial_number,
+        l.loaned_to,
+        l.checkout_date,
+        l.expected_return_date,
+        l.checkout_notes,
+        l.checked_out_by,
+        CASE 
+            WHEN l.expected_return_date < GETUTCDATE() THEN 1 
+            ELSE 0 
+        END as is_overdue
+    FROM dbo.Equipment_Loans l
+    JOIN dbo.Formatted_Company_Inventory i ON l.asset_tag = i.asset_tag
+    WHERE l.actual_return_date IS NULL;');
+
+    COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK;
+    THROW;
+END CATCH;
+2025-01-23 09:20:33,486 - ERROR - Error executing SQL: ('42000', "[42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot define PRIMARY KEY constraint on nullable column in table 'Formatted_Company_Inventory'. (8111) (SQLExecDirectW); [42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Could not create constraint or index. See previous errors. (1750)")
+2025-01-23 09:20:33,489 - ERROR - Traceback (most recent call last):
+  File "C:\Users\sean.wilkinson\OneDrive - Morgan White Group\inventory-app\apply_loaner_changes.py", line 62, in execute_sql_safely
+    cursor.execute(cmd)
+pyodbc.ProgrammingError: ('42000', "[42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot define PRIMARY KEY constraint on nullable column in table 'Formatted_Company_Inventory'. (8111) (SQLExecDirectW); [42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Could not create constraint or index. See previous errors. (1750)")
+
+2025-01-23 09:20:33,490 - ERROR - Failed to apply database changes: ('42000', "[42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Cannot define PRIMARY KEY constraint on nullable column in table 'Formatted_Company_Inventory'. (8111) (SQLExecDirectW); [42000] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Could not create constraint or index. See previous errors. (1750)")
