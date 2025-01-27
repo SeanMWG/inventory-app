@@ -1,133 +1,94 @@
-from flask import Flask, render_template, request, jsonify, g
-import pyodbc
+from flask import Flask, request, jsonify, render_template, url_for
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
 from datetime import datetime
-from utils import get_db_connection, log_change
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='/static')
+CORS(app)
 
-@app.before_request
-def before_request():
-    g.db = get_db_connection()
+# Configure SQLite database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///inventory.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
-@app.teardown_request
-def teardown_request(exception):
-    db = getattr(g, 'db', None)
-    if db is not None:
-        db.close()
+# Hardware Model
+class Hardware(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    manufacturer = db.Column(db.String(100), nullable=False)
+    model_number = db.Column(db.String(100), nullable=False)
+    hardware_type = db.Column(db.String(50), nullable=False)
+    serial_number = db.Column(db.String(100), unique=True, nullable=False)
+    assigned_to = db.Column(db.String(100))
+    location = db.Column(db.String(100))
+    date_assigned = db.Column(db.DateTime)
+    date_decommissioned = db.Column(db.DateTime)
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+# Create tables
+with app.app_context():
+    db.create_all()
 
-@app.route('/api/hardware/<asset_tag>/toggle-loaner', methods=['POST'])
-def toggle_loaner_status(asset_tag):
-    try:
-        cursor = g.db.cursor()
-        
-        # Get current loaner status
-        cursor.execute("""
-            SELECT inventory_id, is_loaner 
-            FROM dbo.Formatted_Company_Inventory 
-            WHERE asset_tag = ?
-        """, asset_tag)
-        
-        result = cursor.fetchone()
-        if not result:
-            return jsonify({'error': 'Asset not found'}), 404
-            
-        inventory_id, current_status = result
-        new_status = not current_status
-        
-        # Update loaner status
-        cursor.execute("""
-            UPDATE dbo.Formatted_Company_Inventory 
-            SET is_loaner = ?
-            WHERE inventory_id = ?
-        """, new_status, inventory_id)
-        
-        # Log the change
-        log_change(
-            cursor=cursor,
-            asset_tag=asset_tag,
-            action_type='UPDATE',
-            field_name='is_loaner',
-            old_value=str(current_status),
-            new_value=str(new_status),
-            changed_by=request.headers.get('X-User-ID', 'system')
-        )
-        
-        g.db.commit()
-        
-        return jsonify({
-            'success': True,
-            'is_loaner': new_status
-        })
-        
-    except Exception as e:
-        g.db.rollback()
-        return jsonify({'error': str(e)}), 500
-
+# Routes
 @app.route('/api/hardware', methods=['GET'])
 def get_hardware():
     try:
-        cursor = g.db.cursor()
-        cursor.execute("""
-            SELECT 
-                inventory_id,
-                site_name,
-                room_number,
-                room_name,
-                asset_tag,
-                asset_type,
-                model,
-                serial_number,
-                notes,
-                assigned_to,
-                date_assigned,
-                date_decommissioned,
-                is_loaner
-            FROM dbo.Formatted_Company_Inventory
-            ORDER BY site_name, room_number, asset_tag
-        """)
+        page = request.args.get('page', 1, type=int)
+        per_page = 35
         
-        columns = [column[0] for column in cursor.description]
-        results = []
+        # Get paginated items
+        pagination = Hardware.query.order_by(Hardware.serial_number).paginate(
+            page=page, per_page=per_page, error_out=False)
         
-        for row in cursor.fetchall():
-            results.append(dict(zip(columns, row)))
-            
-        return jsonify(results)
+        items = [{
+            'id': item.id,
+            'manufacturer': item.manufacturer,
+            'model_number': item.model_number,
+            'hardware_type': item.hardware_type,
+            'serial_number': item.serial_number,
+            'assigned_to': item.assigned_to,
+            'location': item.location,
+            'date_assigned': item.date_assigned.isoformat() if item.date_assigned else None,
+            'date_decommissioned': item.date_decommissioned.isoformat() if item.date_decommissioned else None
+        } for item in pagination.items]
         
+        return jsonify({
+            'items': items,
+            'total_pages': pagination.pages,
+            'current_page': page,
+            'total_items': pagination.total
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/hardware/<asset_tag>/audit', methods=['GET'])
-def get_audit_log(asset_tag):
+@app.route('/api/hardware', methods=['POST'])
+def add_hardware():
     try:
-        cursor = g.db.cursor()
-        cursor.execute("""
-            SELECT 
-                changed_at,
-                action_type,
-                field_name,
-                old_value,
-                new_value,
-                changed_by
-            FROM dbo.AuditLog
-            WHERE asset_tag = ?
-            ORDER BY changed_at DESC
-        """, asset_tag)
+        data = request.json
         
-        columns = [column[0] for column in cursor.description]
-        results = []
+        # Convert date strings to datetime objects if they exist
+        date_assigned = datetime.fromisoformat(data['date_assigned']) if data.get('date_assigned') else None
+        date_decommissioned = datetime.fromisoformat(data['date_decommissioned']) if data.get('date_decommissioned') else None
         
-        for row in cursor.fetchall():
-            results.append(dict(zip(columns, row)))
-            
-        return jsonify(results)
+        new_hardware = Hardware(
+            manufacturer=data['manufacturer'],
+            model_number=data['model_number'],
+            hardware_type=data['hardware_type'],
+            serial_number=data['serial_number'],
+            assigned_to=data.get('assigned_to'),
+            location=data.get('location'),
+            date_assigned=date_assigned,
+            date_decommissioned=date_decommissioned
+        )
         
+        db.session.add(new_hardware)
+        db.session.commit()
+        return jsonify({'message': 'Hardware added successfully'}), 201
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/')
+def serve_index():
+    return render_template('index.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
