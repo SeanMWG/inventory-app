@@ -1,16 +1,19 @@
 #!/bin/bash
 
-# Install ODBC Driver
-curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
-curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list
-apt-get update
-ACCEPT_EULA=Y apt-get install -y msodbcsql18
+# Make script executable
+chmod +x "$0"
+
+# Install ODBC Driver (these commands are handled by Azure App Service)
+# The ODBC driver is pre-installed in the App Service environment
 
 # Install dependencies
+pip install --upgrade pip
 pip install -r requirements.txt
 
 # Debug info
 echo "Current directory: $(pwd)"
+echo "Python version: $(python --version)"
+echo "Pip version: $(pip --version)"
 echo "Listing files:"
 ls -la
 echo "Listing static directory:"
