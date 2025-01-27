@@ -1,11 +1,10 @@
-from flask import Flask, request, jsonify, render_template, url_for
+from flask import Flask, request, jsonify, render_template, url_for, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime
-from whitenoise import WhiteNoise
+import os
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
-app.wsgi_app = WhiteNoise(app.wsgi_app, root='static/', prefix='static/')
 CORS(app)
 
 # Configure SQLite database
@@ -30,6 +29,10 @@ with app.app_context():
     db.create_all()
 
 # Routes
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    return send_from_directory('static', filename)
+
 @app.route('/api/hardware', methods=['GET'])
 def get_hardware():
     try:
