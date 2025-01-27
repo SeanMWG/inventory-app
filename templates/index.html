@@ -38,6 +38,10 @@ body[data-theme="dark"] {
     gap: 10px;
 }
 
+.user-name {
+    font-weight: bold;
+}
+
 .user-role {
     background-color: #007bff;
     color: white;
@@ -46,6 +50,7 @@ body[data-theme="dark"] {
     font-size: 0.9em;
 }
 
+.login-button,
 .logout-button {
     color: #dc3545;
     text-decoration: none;
@@ -54,6 +59,7 @@ body[data-theme="dark"] {
     border-radius: 4px;
 }
 
+.login-button:hover,
 .logout-button:hover {
     background-color: #dc3545;
     color: white;
@@ -333,8 +339,13 @@ body[data-theme="dark"] .pagination button:disabled {
         <!-- Top buttons -->
         <div class="top-buttons">
             <div class="user-info">
-                <span class="user-role">Admin</span>
-                <a href="/logout" class="logout-button">Logout</a>
+                {% if user %}
+                    <span class="user-name">{{ user.get('name', '') }}</span>
+                    <span class="user-role">{{ user.get('roles', ['User'])[0] }}</span>
+                    <a href="/logout" class="logout-button">Logout</a>
+                {% else %}
+                    <a href="/login" class="login-button">Login</a>
+                {% endif %}
             </div>
             <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
         </div>
@@ -352,34 +363,33 @@ body[data-theme="dark"] .pagination button:disabled {
             <div class="filter-grid">
                 <div class="filter-group">
                     <label for="filterManufacturer">Manufacturer</label>
-                    <input type="text" id="filterManufacturer">
+                    <input type="text" id="filterManufacturer" name="filterManufacturer">
                 </div>
                 <div class="filter-group">
                     <label for="filterModel">Model</label>
-                    <input type="text" id="filterModel">
+                    <input type="text" id="filterModel" name="filterModel">
                 </div>
                 <div class="filter-group">
                     <label for="filterType">Type</label>
-                    <input type="text" id="filterType">
+                    <input type="text" id="filterType" name="filterType">
                 </div>
                 <div class="filter-group">
                     <label for="filterSerial">Serial Number</label>
-                    <input type="text" id="filterSerial">
+                    <input type="text" id="filterSerial" name="filterSerial">
                 </div>
                 <div class="filter-group">
                     <label for="filterAssigned">Assigned To</label>
-                    <input type="text" id="filterAssigned">
+                    <input type="text" id="filterAssigned" name="filterAssigned">
                 </div>
                 <div class="filter-group">
                     <label for="filterLocation">Location</label>
-                    <input type="text" id="filterLocation">
+                    <input type="text" id="filterLocation" name="filterLocation">
                 </div>
                 <div class="filter-group">
-                    <label>Date Assigned</label>
-                    <div class="date-range">
-                        <input type="date" id="filterDateAssignedFrom">
-                        <input type="date" id="filterDateAssignedTo">
-                    </div>
+                    <label for="filterDateAssignedFrom">Date Assigned From</label>
+                    <input type="date" id="filterDateAssignedFrom" name="filterDateAssignedFrom">
+                    <label for="filterDateAssignedTo">Date Assigned To</label>
+                    <input type="date" id="filterDateAssignedTo" name="filterDateAssignedTo">
                 </div>
             </div>
             <div class="filter-actions">
@@ -390,7 +400,8 @@ body[data-theme="dark"] .pagination button:disabled {
 
         <!-- Search Field -->
         <div class="search-container">
-            <input type="text" id="searchInput" placeholder="Search inventory...">
+            <label for="searchInput" class="visually-hidden">Search inventory</label>
+            <input type="text" id="searchInput" name="searchInput" placeholder="Search inventory...">
         </div>
         
         <!-- Modal Form -->
@@ -401,42 +412,42 @@ body[data-theme="dark"] .pagination button:disabled {
                 <form id="hardwareForm">
                     <div class="form-group">
                         <label for="manufacturer">Manufacturer:</label>
-                        <input type="text" id="manufacturer" required>
+                        <input type="text" id="manufacturer" name="manufacturer" required>
                     </div>
                     
                     <div class="form-group">
                         <label for="modelNumber">Model Number:</label>
-                        <input type="text" id="modelNumber" required>
+                        <input type="text" id="modelNumber" name="modelNumber" required>
                     </div>
                     
                     <div class="form-group">
                         <label for="hardwareType">Hardware Type:</label>
-                        <input type="text" id="hardwareType" required>
+                        <input type="text" id="hardwareType" name="hardwareType" required>
                     </div>
                     
                     <div class="form-group">
                         <label for="serialNumber">Serial/Service Tag Number:</label>
-                        <input type="text" id="serialNumber" required>
+                        <input type="text" id="serialNumber" name="serialNumber" required>
                     </div>
                     
                     <div class="form-group">
                         <label for="assignedTo">Assigned To:</label>
-                        <input type="text" id="assignedTo">
+                        <input type="text" id="assignedTo" name="assignedTo">
                     </div>
                     
                     <div class="form-group">
                         <label for="location">Location:</label>
-                        <input type="text" id="location">
+                        <input type="text" id="location" name="location">
                     </div>
                     
                     <div class="form-group">
                         <label for="dateAssigned">Date Assigned:</label>
-                        <input type="date" id="dateAssigned">
+                        <input type="date" id="dateAssigned" name="dateAssigned">
                     </div>
                     
                     <div class="form-group">
                         <label for="dateDecommissioned">Date Decommissioned:</label>
-                        <input type="date" id="dateDecommissioned">
+                        <input type="date" id="dateDecommissioned" name="dateDecommissioned">
                     </div>
                     
                     <button type="submit">Add Hardware</button>

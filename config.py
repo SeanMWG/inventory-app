@@ -1,21 +1,12 @@
 import os
 
-# Role definitions
-ROLES = {
-    'admin': 'Admin',      # Can perform all operations
-    'editor': 'Editor',    # Can add and edit items
-    'viewer': 'Viewer'     # Can only view items
-}
+# Azure AD Configuration
+CLIENT_ID = os.getenv('AZURE_CLIENT_ID')
+CLIENT_SECRET = os.getenv('AZURE_CLIENT_SECRET')
+TENANT_ID = os.getenv('AZURE_TENANT_ID')
+AUTHORITY = f'https://login.microsoftonline.com/{TENANT_ID}'
+REDIRECT_URI = os.getenv('AZURE_REDIRECT_URI', 'https://inventory-app-sean.azurewebsites.net/getAToken')
+SCOPE = ['User.Read']
 
-# Role permissions
-ROLE_PERMISSIONS = {
-    'admin': ['view', 'add', 'edit', 'delete'],
-    'editor': ['view', 'add', 'edit'],
-    'viewer': ['view']
-}
-
-# Default role for users if no role is assigned
-DEFAULT_ROLE = 'viewer'
-
-# Database URL (will be provided by environment variable)
+# Database Configuration
 DATABASE_URL = os.getenv('DATABASE_URL')
