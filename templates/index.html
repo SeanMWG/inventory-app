@@ -4,249 +4,224 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IT Hardware Inventory</title>
-    <link rel="stylesheet" href="static/styles.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <!-- AG Grid Community Edition -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-grid.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-theme-alpine.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-theme-alpine-dark.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-grid.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-theme-alpine.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/styles/ag-theme-alpine-dark.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@29.3.5/dist/ag-grid-community.min.js"></script>
 </head>
 <body>
-    <!-- Previous HTML content remains the same until details modal -->
+    <div class="container">
+        <h1>IT Hardware Inventory</h1>
 
-    <!-- Details Modal -->
-    <div id="detailsModal" class="details-modal">
-        <div class="details-content">
-            <span class="close">&times;</span>
-            <h2>Hardware Details</h2>
-            <div class="details-grid">
-                <div class="details-item">
-                    <div class="details-label">Site Name</div>
-                    <div class="details-value" id="detailSiteName"></div>
+        <!-- Search Field -->
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="Search inventory...">
+        </div>
+
+        <!-- Add Hardware Button -->
+        <button id="addHardwareBtn" class="add-button">Add New Hardware</button>
+        
+        <!-- Modal Form -->
+        <div id="formModal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+            <h2>Add New Hardware</h2>
+            <form id="hardwareForm">
+                <div class="form-group">
+                    <label for="manufacturer">Manufacturer:</label>
+                    <input type="text" id="manufacturer" required>
                 </div>
-                <div class="details-item">
-                    <div class="details-label">Room Number</div>
-                    <div class="details-value" id="detailRoomNumber"></div>
+                
+                <div class="form-group">
+                    <label for="modelNumber">Model Number:</label>
+                    <input type="text" id="modelNumber" required>
                 </div>
-                <div class="details-item">
-                    <div class="details-label">Room Name</div>
-                    <div class="details-value" id="detailRoomName"></div>
+                
+                <div class="form-group">
+                    <label for="hardwareType">Hardware Type:</label>
+                    <input type="text" id="hardwareType" required>
                 </div>
-                <div class="details-item">
-                    <div class="details-label">Asset Tag</div>
-                    <div class="details-value" id="detailAssetTag"></div>
+                
+                <div class="form-group">
+                    <label for="serialNumber">Serial/Service Tag Number:</label>
+                    <input type="text" id="serialNumber" required>
                 </div>
-                <div class="details-item">
-                    <div class="details-label">Asset Type</div>
-                    <div class="details-value" id="detailAssetType"></div>
+                
+                <div class="form-group">
+                    <label for="assignedTo">Assigned To:</label>
+                    <input type="text" id="assignedTo">
                 </div>
-                <div class="details-item">
-                    <div class="details-label">Model</div>
-                    <div class="details-value" id="detailModel"></div>
+                
+                <div class="form-group">
+                    <label for="location">Location:</label>
+                    <input type="text" id="location">
                 </div>
-                <div class="details-item">
-                    <div class="details-label">Serial Number</div>
-                    <div class="details-value" id="detailSerialNumber"></div>
+                
+                <div class="form-group">
+                    <label for="dateAssigned">Date Assigned:</label>
+                    <input type="date" id="dateAssigned">
                 </div>
-                <div class="details-item">
-                    <div class="details-label">Notes</div>
-                    <div class="details-value" id="detailNotes"></div>
+                
+                <div class="form-group">
+                    <label for="dateDecommissioned">Date Decommissioned:</label>
+                    <input type="date" id="dateDecommissioned">
                 </div>
-                <div class="details-item">
-                    <div class="details-label">Assigned To</div>
-                    <div class="details-value" id="detailAssignedTo"></div>
-                </div>
-                <div class="details-item">
-                    <div class="details-label">Date Assigned</div>
-                    <div class="details-value" id="detailDateAssigned"></div>
-                </div>
-                <div class="details-item">
-                    <div class="details-label">Date Decommissioned</div>
-                    <div class="details-value" id="detailDateDecommissioned"></div>
-                </div>
+                
+                <button type="submit">Add Hardware</button>
+            </form>
             </div>
-            <div class="details-actions">
-                <button class="view-audit-button" id="viewAuditButton">View History</button>
-                <button class="edit-button" id="detailsEditButton">Edit</button>
-                <button class="loaner-button" id="toggleLoanerButton">Mark as Loaner</button>
+        </div>
+
+        <!-- Hardware List -->
+        <div class="inventory-list">
+            <h2>Current Inventory</h2>
+            <table id="inventoryTable">
+                <thead>
+                    <tr>
+                        <th>Manufacturer</th>
+                        <th>Model</th>
+                        <th>Type</th>
+                        <th>Serial Number</th>
+                        <th>Assigned To</th>
+                        <th>Location</th>
+                        <th>Date Assigned</th>
+                        <th>Date Decommissioned</th>
+                    </tr>
+                </thead>
+                <tbody id="inventoryBody">
+                </tbody>
+            </table>
+            
+            <!-- Pagination Controls -->
+            <div class="pagination">
+                <button id="prevPage" disabled>&laquo; Previous</button>
+                <span id="pageInfo">Page 1 of 1</span>
+                <button id="nextPage" disabled>Next &raquo;</button>
             </div>
         </div>
     </div>
 
-    <!-- Rest of HTML content remains the same -->
-
     <script>
-        // Previous JavaScript code remains the same until columnDefs
+        // Modal controls
+        const modal = document.getElementById('formModal');
+        const btn = document.getElementById('addHardwareBtn');
+        const span = document.getElementsByClassName('close')[0];
 
-        // Column Definitions with Community Edition features
-        const columnDefs = [
-            { 
-                field: 'site_name', 
-                headerName: 'Site Name',
-                sortable: true,
-                filter: true,
-                resizable: true
-            },
-            { 
-                field: 'room_name',
-                headerName: 'Room Name',
-                sortable: true,
-                filter: true,
-                resizable: true
-            },
-            { 
-                field: 'room_number',
-                headerName: 'Room Number',
-                sortable: true,
-                filter: true,
-                resizable: true
-            },
-            { 
-                field: 'asset_tag',
-                headerName: 'Asset Tag',
-                sortable: true,
-                filter: true,
-                resizable: true
-            },
-            { 
-                field: 'asset_type',
-                headerName: 'Asset Type',
-                sortable: true,
-                filter: true,
-                resizable: true
-            },
-            { 
-                field: 'model',
-                headerName: 'Model',
-                sortable: true,
-                filter: true,
-                resizable: true
-            },
-            { 
-                field: 'serial_number',
-                headerName: 'Serial Number',
-                sortable: true,
-                filter: true,
-                resizable: true
-            },
-            { 
-                field: 'notes',
-                headerName: 'Notes',
-                sortable: true,
-                filter: true,
-                resizable: true
-            },
-            { 
-                field: 'assigned_to',
-                headerName: 'Assigned To',
-                sortable: true,
-                filter: true,
-                resizable: true
-            },
-            { 
-                field: 'date_assigned',
-                headerName: 'Date Assigned',
-                sortable: true,
-                filter: true,
-                resizable: true
-            },
-            { 
-                field: 'date_decommissioned',
-                headerName: 'Date Decommissioned',
-                sortable: true,
-                filter: true,
-                resizable: true
-            },
-            {
-                field: 'is_loaner',
-                headerName: 'Loaner',
-                sortable: true,
-                filter: true,
-                resizable: true,
-                cellRenderer: params => params.value ? 'Yes' : 'No'
-            },
-            {
-                headerName: 'Actions',
-                field: 'actions',
-                sortable: false,
-                filter: false,
-                pinned: 'right',
-                width: 100,
-                cellRenderer: (params) => {
-                    const editBtn = document.createElement('button');
-                    editBtn.innerHTML = 'Edit';
-                    editBtn.classList.add('edit-button');
-                    editBtn.addEventListener('click', (event) => {
-                        event.stopPropagation(); // Stop event from bubbling up to row
-                        editHardware(params.data);
-                    });
-                    return editBtn;
-                }
+        btn.onclick = () => modal.style.display = 'block';
+        span.onclick = () => modal.style.display = 'none';
+        window.onclick = (event) => {
+            if (event.target == modal) {
+                modal.style.display = 'none';
             }
-        ];
-
-        // Previous JavaScript code remains the same until showDetails function
-
-        function showDetails(item) {
-            currentItem = item;
-            
-            // Update details view
-            document.getElementById('detailSiteName').textContent = item.site_name || '';
-            document.getElementById('detailRoomNumber').textContent = item.room_number || '';
-            document.getElementById('detailRoomName').textContent = item.room_name || '';
-            document.getElementById('detailAssetTag').textContent = item.asset_tag || '';
-            document.getElementById('detailAssetType').textContent = item.asset_type || '';
-            document.getElementById('detailModel').textContent = item.model || '';
-            document.getElementById('detailSerialNumber').textContent = item.serial_number || '';
-            document.getElementById('detailNotes').textContent = item.notes || '';
-            document.getElementById('detailAssignedTo').textContent = item.assigned_to || '';
-            document.getElementById('detailDateAssigned').textContent = item.date_assigned ? new Date(item.date_assigned).toLocaleDateString() : '';
-            document.getElementById('detailDateDecommissioned').textContent = item.date_decommissioned ? new Date(item.date_decommissioned).toLocaleDateString() : '';
-            
-            // Update loaner button text
-            const loanerButton = document.getElementById('toggleLoanerButton');
-            loanerButton.textContent = item.is_loaner ? 'Remove Loaner Status' : 'Mark as Loaner';
-            
-            // Show the details modal
-            document.getElementById('detailsModal').style.display = 'block';
-            
-            // Set up button click handlers
-            document.getElementById('viewAuditButton').onclick = () => loadAuditLog(item.asset_tag);
-            document.getElementById('detailsEditButton').onclick = () => editHardware(item);
-            document.getElementById('toggleLoanerButton').onclick = () => toggleLoaner(item);
         }
 
-        // Add toggleLoaner function
-        async function toggleLoaner(item) {
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const rows = document.getElementById('inventoryBody').getElementsByTagName('tr');
+            
+            Array.from(rows).forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        });
+
+        // Form submission
+        document.getElementById('hardwareForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                manufacturer: document.getElementById('manufacturer').value,
+                model_number: document.getElementById('modelNumber').value,
+                hardware_type: document.getElementById('hardwareType').value,
+                serial_number: document.getElementById('serialNumber').value,
+                assigned_to: document.getElementById('assignedTo').value,
+                location: document.getElementById('location').value,
+                date_assigned: document.getElementById('dateAssigned').value || null,
+                date_decommissioned: document.getElementById('dateDecommissioned').value || null
+            };
+
             try {
-                const response = await fetch(`/api/hardware/${item.asset_tag}/toggle-loaner`, {
+                const response = await fetch('/api/hardware', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                    }
+                    },
+                    body: JSON.stringify(formData)
                 });
 
-                if (!response.ok) {
+                if (response.ok) {
+                    alert('Hardware added successfully!');
+                    document.getElementById('hardwareForm').reset();
+                    loadInventory();
+                } else {
                     const data = await response.json();
-                    throw new Error(data.error || 'Failed to toggle loaner status');
+                    alert('Error: ' + (data.error || 'Failed to add hardware'));
                 }
-
-                const result = await response.json();
-                
-                // Update the button text based on the new state
-                const button = document.getElementById('toggleLoanerButton');
-                button.textContent = result.is_loaner ? 'Remove Loaner Status' : 'Mark as Loaner';
-                
-                // Reload the grid to reflect the change
-                loadInventory(currentPage);
-                
-                alert(result.is_loaner ? 'Marked as loaner' : 'Removed loaner status');
             } catch (error) {
                 alert('Error: ' + error.message);
             }
+        });
+
+        // Pagination state
+        let currentPage = 1;
+        let totalPages = 1;
+
+        // Load inventory data
+        async function loadInventory(page = 1) {
+            try {
+                const response = await fetch(`/api/hardware?page=${page}`);
+                const data = await response.json();
+                
+                const tbody = document.getElementById('inventoryBody');
+                tbody.innerHTML = '';
+                
+                data.items.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.manufacturer}</td>
+                        <td>${item.model_number}</td>
+                        <td>${item.hardware_type}</td>
+                        <td>${item.serial_number}</td>
+                        <td>${item.assigned_to || ''}</td>
+                        <td>${item.location || ''}</td>
+                        <td>${item.date_assigned ? new Date(item.date_assigned).toLocaleDateString() : ''}</td>
+                        <td>${item.date_decommissioned ? new Date(item.date_decommissioned).toLocaleDateString() : ''}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                // Update pagination state
+                currentPage = data.current_page;
+                totalPages = data.total_pages;
+                
+                // Update pagination controls
+                document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+                document.getElementById('prevPage').disabled = currentPage <= 1;
+                document.getElementById('nextPage').disabled = currentPage >= totalPages;
+                
+            } catch (error) {
+                console.error('Error loading inventory:', error);
+            }
         }
 
-        // Rest of JavaScript code remains the same
+        // Pagination event listeners
+        document.getElementById('prevPage').addEventListener('click', () => {
+            if (currentPage > 1) {
+                loadInventory(currentPage - 1);
+            }
+        });
+
+        document.getElementById('nextPage').addEventListener('click', () => {
+            if (currentPage < totalPages) {
+                loadInventory(currentPage + 1);
+            }
+        });
+
+        // Load inventory on page load
+        loadInventory(1);
     </script>
 </body>
 </html>
