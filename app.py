@@ -2,8 +2,10 @@ from flask import Flask, request, jsonify, render_template, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime
+from whitenoise import WhiteNoise
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
+app.wsgi_app = WhiteNoise(app.wsgi_app, root='static/', prefix='static/')
 CORS(app)
 
 # Configure SQLite database

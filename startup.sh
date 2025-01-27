@@ -8,6 +8,7 @@ ACCEPT_EULA=Y apt-get install -y msodbcsql18
 
 # Install dependencies
 pip install -r requirements.txt
+pip install whitenoise
 
 # Start app with gunicorn
-gunicorn --bind=0.0.0.0:8000 app:app
+gunicorn --bind=0.0.0.0:8000 --workers=4 --timeout=600 app:app
