@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify, render_template, redirect, session, url_for, send_from_directory
-from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime
 import os
@@ -24,9 +23,6 @@ CORS(app, supports_credentials=True, resources={
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Initialize SQLAlchemy for database models
-db = SQLAlchemy(app)
 
 # Initialize MSAL
 def _build_msal_app():
@@ -65,22 +61,15 @@ def login_required(f):
 # Database connection
 def get_db_connection():
     """Get a connection to the SQL Server database"""
-    conn_str = app.config['DATABASE_URL']
-    if not conn_str:
-        raise ValueError("DATABASE_URL environment variable is not set")
-    return pyodbc.connect(conn_str)
-
-# Hardware Model
-class Hardware(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    manufacturer = db.Column(db.String(100), nullable=False)
-    model_number = db.Column(db.String(100), nullable=False)
-    hardware_type = db.Column(db.String(50), nullable=False)
-    serial_number = db.Column(db.String(100), unique=True, nullable=False)
-    assigned_to = db.Column(db.String(100))
-    location = db.Column(db.String(100))
-    date_assigned = db.Column(db.DateTime)
-    date_decommissioned = db.Column(db.DateTime)
+    try:
+        conn_str = app.config['DATABASE_URL']
+        if not conn_str:
+            raise ValueError("DATABASE_URL environment variable is not set")
+        logger.info("Connecting to database...")
+        return pyodbc.connect(conn_str)
+    except Exception as e:
+        logger.error(f"Database connection error: {str(e)}")
+        raise
 
 # Auth routes
 @app.route('/login')
@@ -89,6 +78,7 @@ def login():
         return redirect(url_for('serve_index'))
     session['state'] = os.urandom(16).hex()
     auth_url = _build_auth_url()
+    logger.info(f"Built auth URL: {auth_url}")
     return redirect(auth_url)
 
 @app.route('/logout')
@@ -99,17 +89,21 @@ def logout():
 @app.route(app.config['REDIRECT_PATH'])
 def authorized():
     if request.args.get('state') != session.get('state'):
+        logger.warning("State mismatch in authorized route")
         return redirect(url_for('login'))
     
     if request.args.get('code'):
+        logger.info("Got authorization code, acquiring token")
         result = _build_msal_app().acquire_token_by_authorization_code(
             request.args['code'],
             scopes=app.config['SCOPE'],
             redirect_uri=app.config['REDIRECT_URI']
         )
         if 'error' in result:
+            logger.error(f"Error acquiring token: {result['error']}")
             return result['error']
         session['user'] = result.get('id_token_claims')
+        logger.info("Successfully acquired token and set user session")
         return redirect(url_for('serve_index'))
     return redirect(url_for('login'))
 
@@ -205,6 +199,7 @@ def add_hardware():
     except Exception as e:
         if 'conn' in locals():
             conn.rollback()
+        logger.error(f"Error adding hardware: {str(e)}")
         return jsonify({'error': str(e)}), 400
     finally:
         if 'conn' in locals():
@@ -213,6 +208,7 @@ def add_hardware():
 @app.route('/')
 def serve_index():
     user = session.get('user', {})
+    logger.info(f"Serving index for user: {user.get('name', 'Anonymous')}")
     return render_template('index.html', user=user)
 
 @app.route('/static/<path:path>')
