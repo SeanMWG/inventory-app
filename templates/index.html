@@ -4,335 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IT Hardware Inventory</title>
-    <style>
-/* General styles */
-body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 20px;
-    background-color: #f5f5f5;
-    color: #333;
-}
-
-body[data-theme="dark"] {
-    background-color: #1e1e1e;
-    color: #ffffff;
-}
-
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-}
-
-/* Top buttons */
-.top-buttons {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.user-info {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.user-name {
-    font-weight: bold;
-}
-
-.user-role {
-    background-color: #007bff;
-    color: white;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.9em;
-}
-
-.login-button,
-.logout-button {
-    color: #dc3545;
-    text-decoration: none;
-    padding: 5px 10px;
-    border: 1px solid #dc3545;
-    border-radius: 4px;
-}
-
-.login-button:hover,
-.logout-button:hover {
-    background-color: #dc3545;
-    color: white;
-}
-
-/* Theme toggle */
-.theme-toggle {
-    background: none;
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 10px;
-    border-radius: 4px;
-    color: inherit;
-}
-
-.theme-toggle:hover {
-    background-color: rgba(0, 0, 0, 0.1);
-}
-
-body[data-theme="dark"] .theme-toggle:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-}
-
-/* Action buttons */
-.action-buttons {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-}
-
-.action-button {
-    padding: 8px 16px;
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    text-decoration: none;
-    font-size: 14px;
-}
-
-.action-button:hover {
-    background-color: #0056b3;
-}
-
-/* Filter panel */
-.filter-panel {
-    background-color: #ffffff;
-    padding: 20px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    display: none;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-body[data-theme="dark"] .filter-panel {
-    background-color: #2d2d2d;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.filter-panel.active {
-    display: block;
-}
-
-.filter-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 15px;
-}
-
-.filter-group {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-
-.filter-group label {
-    font-weight: bold;
-    font-size: 14px;
-}
-
-.filter-group input {
-    padding: 8px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    background-color: white;
-    color: #333;
-}
-
-body[data-theme="dark"] .filter-group input {
-    background-color: #3d3d3d;
-    border-color: #4d4d4d;
-    color: white;
-}
-
-.date-range {
-    display: flex;
-    gap: 10px;
-}
-
-.filter-actions {
-    margin-top: 20px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-}
-
-/* Search container */
-.search-container {
-    margin-bottom: 20px;
-}
-
-.search-container input {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 16px;
-}
-
-body[data-theme="dark"] .search-container input {
-    background-color: #3d3d3d;
-    border-color: #4d4d4d;
-    color: white;
-}
-
-/* Modals */
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
-}
-
-.modal-content {
-    background-color: #ffffff;
-    margin: 50px auto;
-    padding: 20px;
-    border-radius: 8px;
-    max-width: 600px;
-    position: relative;
-    max-height: 80vh;
-    overflow-y: auto;
-}
-
-body[data-theme="dark"] .modal-content {
-    background-color: #2d2d2d;
-}
-
-.close {
-    position: absolute;
-    right: 20px;
-    top: 20px;
-    font-size: 24px;
-    cursor: pointer;
-    color: #666;
-}
-
-.close:hover {
-    color: #333;
-}
-
-body[data-theme="dark"] .close {
-    color: #999;
-}
-
-body[data-theme="dark"] .close:hover {
-    color: #fff;
-}
-
-/* Form styles */
-.form-group {
-    margin-bottom: 15px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: bold;
-}
-
-.form-group input {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    box-sizing: border-box;
-}
-
-body[data-theme="dark"] .form-group input {
-    background-color: #3d3d3d;
-    border-color: #4d4d4d;
-    color: white;
-}
-
-/* Table styles */
-#inventoryTable {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 20px;
-    background-color: #fff;
-    border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-body[data-theme="dark"] #inventoryTable {
-    background-color: #2d2d2d;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-#inventoryTable th,
-#inventoryTable td {
-    padding: 12px;
-    text-align: left;
-    border-bottom: 1px solid #ddd;
-}
-
-body[data-theme="dark"] #inventoryTable th,
-body[data-theme="dark"] #inventoryTable td {
-    border-color: #4d4d4d;
-}
-
-#inventoryTable th {
-    background-color: #f8f9fa;
-    font-weight: bold;
-}
-
-body[data-theme="dark"] #inventoryTable th {
-    background-color: #3d3d3d;
-}
-
-#inventoryTable tr:hover {
-    background-color: #f5f5f5;
-}
-
-body[data-theme="dark"] #inventoryTable tr:hover {
-    background-color: #3d3d3d;
-}
-
-/* Pagination */
-.pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 20px;
-    margin-top: 20px;
-}
-
-.pagination button {
-    padding: 8px 16px;
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.pagination button:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
-}
-
-body[data-theme="dark"] .pagination button:disabled {
-    background-color: #4d4d4d;
-}
-    </style>
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
     <div class="container">
@@ -400,7 +72,7 @@ body[data-theme="dark"] .pagination button:disabled {
 
         <!-- Search Field -->
         <div class="search-container">
-            <label for="searchInput" class="visually-hidden">Search inventory</label>
+            <label for="searchInput">Search inventory</label>
             <input type="text" id="searchInput" name="searchInput" placeholder="Search inventory...">
         </div>
         
@@ -554,6 +226,7 @@ body[data-theme="dark"] .pagination button:disabled {
                     headers: {
                         'Content-Type': 'application/json',
                     },
+                    credentials: 'same-origin',
                     body: JSON.stringify(formData)
                 });
 
@@ -563,6 +236,10 @@ body[data-theme="dark"] .pagination button:disabled {
                     modal.style.display = 'none';
                     loadInventory();
                 } else {
+                    if (response.status === 401) {
+                        window.location.href = '/login';
+                        return;
+                    }
                     const data = await response.json();
                     alert('Error: ' + (data.error || 'Failed to add hardware'));
                 }
@@ -578,8 +255,15 @@ body[data-theme="dark"] .pagination button:disabled {
         // Load inventory data
         async function loadInventory(page = 1) {
             try {
-                const response = await fetch(`/api/hardware?page=${page}`);
+                const response = await fetch(`/api/hardware?page=${page}`, {
+                    credentials: 'same-origin'
+                });
+                
                 if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = '/login';
+                        return;
+                    }
                     throw new Error('Failed to load inventory data');
                 }
                 
