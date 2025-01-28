@@ -51,6 +51,12 @@
                     <input type="text" id="filterRoomName">
                 </div>
                 <div class="filter-group">
+                    <label for="filterRoomType">Room Type:</label>
+                    <select id="filterRoomType">
+                        <option value="">All Types</option>
+                    </select>
+                </div>
+                <div class="filter-group">
                     <label for="filterAssetTag">Asset Tag:</label>
                     <input type="text" id="filterAssetTag">
                 </div>
@@ -126,6 +132,17 @@
                         <input type="text" id="roomName" required>
                     </div>
                     <div class="form-group">
+                        <label for="roomType">Room Type:</label>
+                        <select id="roomType" required>
+                            <option value="">Select Type</option>
+                            <option value="Cubicle">Cubicle</option>
+                            <option value="Office">Office</option>
+                            <option value="Storage">Storage</option>
+                            <option value="Server Room">Server Room</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label for="assetTag">Asset Tag:</label>
                         <input type="text" id="assetTag" required>
                     </div>
@@ -179,6 +196,10 @@
                     <div class="details-item">
                         <div class="details-label">Room Name</div>
                         <div class="details-value" id="detailRoomName"></div>
+                    </div>
+                    <div class="details-item">
+                        <div class="details-label">Room Type</div>
+                        <div class="details-value" id="detailRoomType"></div>
                     </div>
                     <div class="details-item">
                         <div class="details-label">Asset Tag</div>
@@ -272,6 +293,13 @@
             { 
                 field: 'room_number',
                 headerName: 'Room Number',
+                sortable: true,
+                filter: true,
+                resizable: true
+            },
+            { 
+                field: 'room_type',
+                headerName: 'Room Type',
                 sortable: true,
                 filter: true,
                 resizable: true
@@ -376,12 +404,40 @@
                     columnApi.applyColumnState(JSON.parse(savedState));
                 }
                 
+                // Load room types for filter
+                loadRoomTypes();
+                
                 // Initial data load
                 loadInventory(1);
             },
             onRowClicked: (params) => showDetails(params.data),
             getRowHeight: () => 40
         };
+
+        // Load room types for filter dropdown
+        async function loadRoomTypes() {
+            try {
+                const response = await fetch('/api/locations/types');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const types = await response.json();
+                const filterSelect = document.getElementById('filterRoomType');
+                const formSelect = document.getElementById('roomType');
+                
+                types.forEach(type => {
+                    const option = document.createElement('option');
+                    option.value = type;
+                    option.textContent = type;
+                    filterSelect.appendChild(option.cloneNode(true));
+                    if (!formSelect.querySelector(`option[value="${type}"]`)) {
+                        formSelect.appendChild(option);
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading room types:', error);
+            }
+        }
 
         // Search functionality with debounce
         let searchTimeout;
@@ -407,6 +463,7 @@
                 site_name: document.getElementById('filterSiteName')?.value || '',
                 room_number: document.getElementById('filterRoomNumber')?.value || '',
                 room_name: document.getElementById('filterRoomName')?.value || '',
+                room_type: document.getElementById('filterRoomType')?.value || '',
                 asset_tag: document.getElementById('filterAssetTag')?.value || '',
                 asset_type: document.getElementById('filterAssetType')?.value || '',
                 model: document.getElementById('filterModel')?.value || '',
@@ -424,9 +481,8 @@
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
-                if (Array.isArray(data.items)) {
-                    gridApi.setRowData(data.items);
-                    totalPages = Math.ceil(data.total_items / 35);
+                if (Array.isArray(data)) {
+                    gridApi.setRowData(data);
                     updatePaginationControls();
                 }
             } catch (error) {
@@ -508,7 +564,7 @@
 
             // Clear filters
             document.getElementById('clearFilters').addEventListener('click', () => {
-                document.querySelectorAll('.filter-group input').forEach(input => {
+                document.querySelectorAll('.filter-group input, .filter-group select').forEach(input => {
                     input.value = '';
                 });
                 currentPage = 1; // Reset to first page when clearing filters
@@ -547,6 +603,7 @@
                     site_name: document.getElementById('siteName').value,
                     room_number: document.getElementById('roomNumber').value,
                     room_name: document.getElementById('roomName').value,
+                    room_type: document.getElementById('roomType').value,
                     asset_tag: document.getElementById('assetTag').value,
                     asset_type: document.getElementById('assetType').value,
                     model: document.getElementById('model').value,

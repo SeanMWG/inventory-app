@@ -1,231 +1,192 @@
-from flask import Flask, request, jsonify, render_template, redirect, session, url_for, send_from_directory
-from flask_cors import CORS
-from datetime import datetime
-import os
-import msal
+from flask import Flask, render_template, request, jsonify, g
 import pyodbc
-import logging
+from datetime import datetime
+from utils import get_db_connection, log_change
 
 app = Flask(__name__)
-app.config.from_object('config')
-app.secret_key = os.urandom(24)  # Required for session management
 
-# Configure CORS
-CORS(app, supports_credentials=True, resources={
-    r"/*": {
-        "origins": ["https://inventory-app-sean.azurewebsites.net", "https://login.microsoftonline.com"],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
-        "supports_credentials": True
-    }
-})
+@app.before_request
+def before_request():
+    g.db = get_db_connection()
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Initialize MSAL
-def _build_msal_app():
-    return msal.ConfidentialClientApplication(
-        app.config['CLIENT_ID'],
-        authority=app.config['AUTHORITY'],
-        client_credential=app.config['CLIENT_SECRET']
-    )
-
-def _build_auth_url():
-    return _build_msal_app().get_authorization_request_url(
-        app.config['SCOPE'],
-        redirect_uri=app.config['REDIRECT_URI'],
-        state=session.get('state', '')
-    )
-
-def _get_token_from_cache():
-    cache = _build_msal_app().get_token_cache()
-    accounts = cache.find(app.config['SCOPE'])
-    if accounts:
-        result = _build_msal_app().acquire_token_silent(
-            app.config['SCOPE'],
-            account=accounts[0]
-        )
-        return result
-
-# Authentication decorator
-def login_required(f):
-    def decorated_function(*args, **kwargs):
-        if not session.get('user'):
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    decorated_function.__name__ = f.__name__
-    return decorated_function
-
-# Database connection
-def get_db_connection():
-    """Get a connection to the SQL Server database"""
-    try:
-        conn_str = app.config['DATABASE_URL']
-        if not conn_str:
-            raise ValueError("DATABASE_URL environment variable is not set")
-        logger.info("Connecting to database...")
-        return pyodbc.connect(conn_str)
-    except Exception as e:
-        logger.error(f"Database connection error: {str(e)}")
-        raise
-
-# Auth routes
-@app.route('/login')
-def login():
-    if session.get('user'):
-        return redirect(url_for('serve_index'))
-    session['state'] = os.urandom(16).hex()
-    auth_url = _build_auth_url()
-    logger.info(f"Built auth URL: {auth_url}")
-    return redirect(auth_url)
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('serve_index'))
-
-@app.route(app.config['REDIRECT_PATH'])
-def authorized():
-    if request.args.get('state') != session.get('state'):
-        logger.warning("State mismatch in authorized route")
-        return redirect(url_for('login'))
-    
-    if request.args.get('code'):
-        logger.info("Got authorization code, acquiring token")
-        result = _build_msal_app().acquire_token_by_authorization_code(
-            request.args['code'],
-            scopes=app.config['SCOPE'],
-            redirect_uri=app.config['REDIRECT_URI']
-        )
-        if 'error' in result:
-            logger.error(f"Error acquiring token: {result['error']}")
-            return result['error']
-        session['user'] = result.get('id_token_claims')
-        logger.info("Successfully acquired token and set user session")
-        return redirect(url_for('serve_index'))
-    return redirect(url_for('login'))
-
-# API Routes
-@app.route('/api/hardware', methods=['GET', 'OPTIONS'])
-@login_required
-def get_hardware():
-    if request.method == 'OPTIONS':
-        return '', 200
-        
-    try:
-        page = request.args.get('page', 1, type=int)
-        per_page = 35
-        offset = (page - 1) * per_page
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Get total count
-        cursor.execute('SELECT COUNT(*) FROM dbo.Formatted_Company_Inventory')
-        total_items = cursor.fetchone()[0]
-        
-        # Get paginated items
-        cursor.execute('''
-            SELECT manufacturer, model_number, hardware_type, serial_number, 
-                   assigned_to, location, date_assigned, date_decommissioned
-            FROM dbo.Formatted_Company_Inventory
-            ORDER BY serial_number
-            OFFSET ? ROWS
-            FETCH NEXT ? ROWS ONLY
-        ''', (offset, per_page))
-        
-        items = []
-        for row in cursor.fetchall():
-            items.append({
-                'manufacturer': row[0],
-                'model_number': row[1],
-                'hardware_type': row[2],
-                'serial_number': row[3],
-                'assigned_to': row[4],
-                'location': row[5],
-                'date_assigned': row[6].isoformat() if row[6] else None,
-                'date_decommissioned': row[7].isoformat() if row[7] else None
-            })
-        
-        total_pages = (total_items + per_page - 1) // per_page
-        
-        return jsonify({
-            'items': items,
-            'total_pages': total_pages,
-            'current_page': page,
-            'total_items': total_items
-        })
-    except Exception as e:
-        logger.error(f"Error getting hardware: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-    finally:
-        if 'conn' in locals():
-            conn.close()
-
-@app.route('/api/hardware', methods=['POST', 'OPTIONS'])
-@login_required
-def add_hardware():
-    if request.method == 'OPTIONS':
-        return '', 200
-        
-    try:
-        data = request.json
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Convert date strings to datetime objects if they exist
-        date_assigned = datetime.fromisoformat(data['date_assigned']) if data.get('date_assigned') else None
-        date_decommissioned = datetime.fromisoformat(data['date_decommissioned']) if data.get('date_decommissioned') else None
-        
-        cursor.execute('''
-            INSERT INTO dbo.Formatted_Company_Inventory 
-            (manufacturer, model_number, hardware_type, serial_number, assigned_to, location, date_assigned, date_decommissioned)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            data['manufacturer'],
-            data['model_number'],
-            data['hardware_type'],
-            data['serial_number'],
-            data.get('assigned_to'),
-            data.get('location'),
-            date_assigned,
-            date_decommissioned
-        ))
-        
-        conn.commit()
-        return jsonify({'message': 'Hardware added successfully'}), 201
-    except Exception as e:
-        if 'conn' in locals():
-            conn.rollback()
-        logger.error(f"Error adding hardware: {str(e)}")
-        return jsonify({'error': str(e)}), 400
-    finally:
-        if 'conn' in locals():
-            conn.close()
+@app.teardown_request
+def teardown_request(exception):
+    db = getattr(g, 'db', None)
+    if db is not None:
+        db.close()
 
 @app.route('/')
-def serve_index():
-    user = session.get('user', {})
-    logger.info(f"Serving index for user: {user.get('name', 'Anonymous')}")
-    return render_template('index.html', user=user)
+def index():
+    return render_template('index.html')
 
-@app.route('/static/<path:path>')
-def serve_static(path):
-    return send_from_directory('static', path)
+@app.route('/api/locations', methods=['GET'])
+def get_locations():
+    try:
+        cursor = g.db.cursor()
+        cursor.execute("""
+            SELECT 
+                location_id,
+                site_name,
+                room_number,
+                room_name,
+                room_type
+            FROM dbo.Locations
+            ORDER BY site_name, room_number
+        """)
+        
+        columns = [column[0] for column in cursor.description]
+        results = []
+        
+        for row in cursor.fetchall():
+            results.append(dict(zip(columns, row)))
+            
+        return jsonify(results)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-# Add CORS headers after request
-@app.after_request
-def after_request(response):
-    origin = request.headers.get('Origin')
-    if origin in ['https://inventory-app-sean.azurewebsites.net', 'https://login.microsoftonline.com']:
-        response.headers.add('Access-Control-Allow-Origin', origin)
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        response.headers.add('Access-Control-Max-Age', '3600')
-    return response
+@app.route('/api/locations/types', methods=['GET'])
+def get_room_types():
+    try:
+        cursor = g.db.cursor()
+        cursor.execute("""
+            SELECT DISTINCT room_type
+            FROM dbo.Locations
+            ORDER BY room_type
+        """)
+        
+        types = [row[0] for row in cursor.fetchall()]
+        return jsonify(types)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/hardware/<asset_tag>/toggle-loaner', methods=['POST'])
+def toggle_loaner_status(asset_tag):
+    try:
+        cursor = g.db.cursor()
+        
+        # Get current loaner status
+        cursor.execute("""
+            SELECT inventory_id, is_loaner 
+            FROM dbo.Formatted_Company_Inventory 
+            WHERE asset_tag = ?
+        """, asset_tag)
+        
+        result = cursor.fetchone()
+        if not result:
+            return jsonify({'error': 'Asset not found'}), 404
+            
+        inventory_id, current_status = result
+        new_status = not current_status
+        
+        # Update loaner status
+        cursor.execute("""
+            UPDATE dbo.Formatted_Company_Inventory 
+            SET is_loaner = ?
+            WHERE inventory_id = ?
+        """, new_status, inventory_id)
+        
+        # Log the change
+        log_change(
+            cursor=cursor,
+            asset_tag=asset_tag,
+            action_type='UPDATE',
+            field_name='is_loaner',
+            old_value=str(current_status),
+            new_value=str(new_status),
+            changed_by=request.headers.get('X-User-ID', 'system')
+        )
+        
+        g.db.commit()
+        
+        return jsonify({
+            'success': True,
+            'is_loaner': new_status
+        })
+        
+    except Exception as e:
+        g.db.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/hardware', methods=['GET'])
+def get_hardware():
+    try:
+        cursor = g.db.cursor()
+        
+        # Get query parameters
+        room_type = request.args.get('room_type')
+        
+        # Base query
+        query = """
+            SELECT 
+                i.inventory_id,
+                l.site_name,
+                l.room_number,
+                l.room_name,
+                l.room_type,
+                i.asset_tag,
+                i.asset_type,
+                i.model,
+                i.serial_number,
+                i.notes,
+                i.assigned_to,
+                i.date_assigned,
+                i.date_decommissioned,
+                i.is_loaner
+            FROM dbo.Formatted_Company_Inventory i
+            JOIN dbo.Locations l ON i.location_id = l.location_id
+            WHERE 1=1
+        """
+        params = []
+        
+        # Add room type filter if specified
+        if room_type:
+            query += " AND l.room_type = ?"
+            params.append(room_type)
+            
+        query += " ORDER BY l.site_name, l.room_number, i.asset_tag"
+        
+        cursor.execute(query, params)
+        
+        columns = [column[0] for column in cursor.description]
+        results = []
+        
+        for row in cursor.fetchall():
+            results.append(dict(zip(columns, row)))
+            
+        return jsonify(results)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/hardware/<asset_tag>/audit', methods=['GET'])
+def get_audit_log(asset_tag):
+    try:
+        cursor = g.db.cursor()
+        cursor.execute("""
+            SELECT 
+                changed_at,
+                action_type,
+                field_name,
+                old_value,
+                new_value,
+                changed_by
+            FROM dbo.AuditLog
+            WHERE asset_tag = ?
+            ORDER BY changed_at DESC
+        """, asset_tag)
+        
+        columns = [column[0] for column in cursor.description]
+        results = []
+        
+        for row in cursor.fetchall():
+            results.append(dict(zip(columns, row)))
+            
+        return jsonify(results)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
