@@ -448,9 +448,9 @@
             }, 300);
         });
 
-        // Get current search parameters
+        // Get current search parameters and persist them
         function getCurrentSearchParams() {
-            return {
+            const params = {
                 search: document.getElementById('searchInput').value,
                 site_name: document.getElementById('filterSiteName')?.value || '',
                 room_number: document.getElementById('filterRoomNumber')?.value || '',
@@ -466,6 +466,36 @@
                 date_decommissioned_from: document.getElementById('filterDateDecommissionedFrom')?.value || '',
                 date_decommissioned_to: document.getElementById('filterDateDecommissionedTo')?.value || ''
             };
+
+            // Save current state to sessionStorage
+            sessionStorage.setItem('searchParams', JSON.stringify(params));
+            return params;
+        }
+
+        // Restore search parameters from sessionStorage
+        function restoreSearchParams() {
+            try {
+                const savedParams = sessionStorage.getItem('searchParams');
+                if (savedParams) {
+                    const params = JSON.parse(savedParams);
+                    document.getElementById('searchInput').value = params.search || '';
+                    document.getElementById('filterSiteName').value = params.site_name || '';
+                    document.getElementById('filterRoomNumber').value = params.room_number || '';
+                    document.getElementById('filterRoomName').value = params.room_name || '';
+                    document.getElementById('filterRoomType').value = params.room_type || '';
+                    document.getElementById('filterAssetTag').value = params.asset_tag || '';
+                    document.getElementById('filterAssetType').value = params.asset_type || '';
+                    document.getElementById('filterModel').value = params.model || '';
+                    document.getElementById('filterSerialNumber').value = params.serial_number || '';
+                    document.getElementById('filterAssignedTo').value = params.assigned_to || '';
+                    document.getElementById('filterDateAssignedFrom').value = params.date_assigned_from || '';
+                    document.getElementById('filterDateAssignedTo').value = params.date_assigned_to || '';
+                    document.getElementById('filterDateDecommissionedFrom').value = params.date_decommissioned_from || '';
+                    document.getElementById('filterDateDecommissionedTo').value = params.date_decommissioned_to || '';
+                }
+            } catch (error) {
+                console.error('Error restoring search params:', error);
+            }
         }
 
         // Load inventory data
@@ -478,7 +508,7 @@
                 const requestedPage = parseInt(page);
                 console.log('Loading page:', requestedPage);
                 
-                // Get current search parameters
+                // Get and persist current search parameters
                 const searchParams = getCurrentSearchParams();
                 
                 // Create URL parameters
@@ -520,10 +550,6 @@
                     document.getElementById('prevPage').focus();
                 }
 
-                // Update URL with current state
-                const url = new URL(window.location);
-                url.searchParams.set('page', currentPage.toString());
-                window.history.replaceState({}, '', url);
                 
             } catch (error) {
                 console.error('Error loading inventory:', error);
@@ -655,10 +681,16 @@
             }
         }
 
-        // Initialize Grid
-        document.addEventListener('DOMContentLoaded', () => {
-            const gridDiv = document.querySelector('#myGrid');
-            new agGrid.Grid(gridDiv, gridOptions);
+                // Initialize Grid
+                document.addEventListener('DOMContentLoaded', () => {
+                    const gridDiv = document.querySelector('#myGrid');
+                    new agGrid.Grid(gridDiv, gridOptions);
+
+                    // Restore search parameters and load initial page from URL
+                    restoreSearchParams();
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const initialPage = parseInt(urlParams.get('page')) || 1;
+                    loadInventory(initialPage);
 
             // Pagination event listeners
             const prevButton = document.getElementById('prevPage');
