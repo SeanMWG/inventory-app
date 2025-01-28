@@ -491,9 +491,28 @@
 
         // Updated pagination controls function
         function updatePaginationControls() {
-            document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
-            document.getElementById('prevPage').disabled = currentPage <= 1;
-            document.getElementById('nextPage').disabled = currentPage >= totalPages;
+            const prevButton = document.getElementById('prevPage');
+            const nextButton = document.getElementById('nextPage');
+            const pageInfo = document.getElementById('pageInfo');
+            
+            pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+            
+            // Update button states
+            if (currentPage <= 1) {
+                prevButton.disabled = true;
+                prevButton.classList.add('disabled');
+            } else {
+                prevButton.disabled = false;
+                prevButton.classList.remove('disabled');
+            }
+            
+            if (currentPage >= totalPages) {
+                nextButton.disabled = true;
+                nextButton.classList.add('disabled');
+            } else {
+                nextButton.disabled = false;
+                nextButton.classList.remove('disabled');
+            }
         }
 
         // Show details function
@@ -585,14 +604,14 @@
             new agGrid.Grid(gridDiv, gridOptions);
 
             // Pagination event listeners
-            document.getElementById('prevPage').addEventListener('click', () => {
-                if (currentPage > 1) {
+            document.getElementById('prevPage').addEventListener('click', function() {
+                if (!this.disabled && currentPage > 1) {
                     loadInventory(currentPage - 1);
                 }
             });
 
-            document.getElementById('nextPage').addEventListener('click', () => {
-                if (currentPage < totalPages) {
+            document.getElementById('nextPage').addEventListener('click', function() {
+                if (!this.disabled && currentPage < totalPages) {
                     loadInventory(currentPage + 1);
                 }
             });

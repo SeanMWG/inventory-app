@@ -317,13 +317,17 @@ body[data-theme="dark"] #inventoryTable tr:hover {
     cursor: pointer;
 }
 
-.pagination button:disabled {
+.pagination button:disabled,
+.pagination button.disabled {
     background-color: #ccc;
     cursor: not-allowed;
+    opacity: 0.6;
 }
 
-body[data-theme="dark"] .pagination button:disabled {
+body[data-theme="dark"] .pagination button:disabled,
+body[data-theme="dark"] .pagination button.disabled {
     background-color: #4d4d4d;
+    opacity: 0.6;
 }
 
 /* Hide visually but keep for screen readers */
