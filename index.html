@@ -448,6 +448,26 @@
             }, 300);
         });
 
+        // Get current search parameters
+        function getCurrentSearchParams() {
+            return {
+                search: document.getElementById('searchInput').value,
+                site_name: document.getElementById('filterSiteName')?.value || '',
+                room_number: document.getElementById('filterRoomNumber')?.value || '',
+                room_name: document.getElementById('filterRoomName')?.value || '',
+                room_type: document.getElementById('filterRoomType')?.value || '',
+                asset_tag: document.getElementById('filterAssetTag')?.value || '',
+                asset_type: document.getElementById('filterAssetType')?.value || '',
+                model: document.getElementById('filterModel')?.value || '',
+                serial_number: document.getElementById('filterSerialNumber')?.value || '',
+                assigned_to: document.getElementById('filterAssignedTo')?.value || '',
+                date_assigned_from: document.getElementById('filterDateAssignedFrom')?.value || '',
+                date_assigned_to: document.getElementById('filterDateAssignedTo')?.value || '',
+                date_decommissioned_from: document.getElementById('filterDateDecommissionedFrom')?.value || '',
+                date_decommissioned_to: document.getElementById('filterDateDecommissionedTo')?.value || ''
+            };
+        }
+
         // Load inventory data
         async function loadInventory(page = 1) {
             try {
@@ -458,24 +478,13 @@
                 const requestedPage = parseInt(page);
                 console.log('Loading page:', requestedPage);
                 
-                const searchTerm = document.getElementById('searchInput').value;
+                // Get current search parameters
+                const searchParams = getCurrentSearchParams();
                 
+                // Create URL parameters
                 const params = new URLSearchParams({
-                    page: page,
-                    search: searchTerm,
-                    site_name: document.getElementById('filterSiteName')?.value || '',
-                    room_number: document.getElementById('filterRoomNumber')?.value || '',
-                    room_name: document.getElementById('filterRoomName')?.value || '',
-                    room_type: document.getElementById('filterRoomType')?.value || '',
-                    asset_tag: document.getElementById('filterAssetTag')?.value || '',
-                    asset_type: document.getElementById('filterAssetType')?.value || '',
-                    model: document.getElementById('filterModel')?.value || '',
-                    serial_number: document.getElementById('filterSerialNumber')?.value || '',
-                    assigned_to: document.getElementById('filterAssignedTo')?.value || '',
-                    date_assigned_from: document.getElementById('filterDateAssignedFrom')?.value || '',
-                    date_assigned_to: document.getElementById('filterDateAssignedTo')?.value || '',
-                    date_decommissioned_from: document.getElementById('filterDateDecommissionedFrom')?.value || '',
-                    date_decommissioned_to: document.getElementById('filterDateDecommissionedTo')?.value || ''
+                    page: requestedPage.toString(),
+                    ...searchParams
                 });
 
                 const response = await fetch(`/api/hardware?${params.toString()}`);
@@ -510,6 +519,11 @@
                 } else if (requestedPage < currentPage) {
                     document.getElementById('prevPage').focus();
                 }
+
+                // Update URL with current state
+                const url = new URL(window.location);
+                url.searchParams.set('page', currentPage.toString());
+                window.history.replaceState({}, '', url);
                 
             } catch (error) {
                 console.error('Error loading inventory:', error);
