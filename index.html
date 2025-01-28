@@ -372,7 +372,7 @@
                     editBtn.innerHTML = 'Edit';
                     editBtn.classList.add('edit-button');
                     editBtn.addEventListener('click', (event) => {
-                        event.stopPropagation(); // Stop event from bubbling up to row
+                        event.stopPropagation();
                         editHardware(params.data);
                     });
                     return editBtn;
@@ -391,23 +391,19 @@
                 filter: true
             },
             rowData: [],
-            pagination: false, // Disable AG Grid's pagination since we're using server-side
+            pagination: false,
             suppressRowClickSelection: true,
             rowSelection: 'single',
             onGridReady: (params) => {
                 gridApi = params.api;
                 columnApi = params.columnApi;
                 
-                // Load saved column state
                 const savedState = localStorage.getItem('gridState');
                 if (savedState) {
                     columnApi.applyColumnState(JSON.parse(savedState));
                 }
                 
-                // Load room types for filter
                 loadRoomTypes();
-                
-                // Initial data load
                 loadInventory(1);
             },
             onRowClicked: (params) => showDetails(params.data),
@@ -447,7 +443,7 @@
             }
             
             searchTimeout = setTimeout(() => {
-                currentPage = 1; // Reset to first page when searching
+                currentPage = 1;
                 loadInventory(1);
             }, 300);
         });
@@ -482,10 +478,8 @@
                 }
                 const data = await response.json();
                 
-                // Update grid with items
                 gridApi.setRowData(data.items);
                 
-                // Update pagination info
                 currentPage = data.page;
                 totalPages = data.total_pages;
                 updatePaginationControls();
@@ -502,12 +496,95 @@
             document.getElementById('nextPage').disabled = currentPage >= totalPages;
         }
 
+        // Show details function
+        function showDetails(data) {
+            currentItem = data;
+            
+            document.getElementById('detailSiteName').textContent = data.site_name || '';
+            document.getElementById('detailRoomNumber').textContent = data.room_number || '';
+            document.getElementById('detailRoomName').textContent = data.room_name || '';
+            document.getElementById('detailRoomType').textContent = data.room_type || '';
+            document.getElementById('detailAssetTag').textContent = data.asset_tag || '';
+            document.getElementById('detailAssetType').textContent = data.asset_type || '';
+            document.getElementById('detailModel').textContent = data.model || '';
+            document.getElementById('detailSerialNumber').textContent = data.serial_number || '';
+            document.getElementById('detailNotes').textContent = data.notes || '';
+            document.getElementById('detailAssignedTo').textContent = data.assigned_to || '';
+            document.getElementById('detailDateAssigned').textContent = data.date_assigned || '';
+            document.getElementById('detailDateDecommissioned').textContent = data.date_decommissioned || '';
+            
+            document.getElementById('detailsModal').style.display = 'block';
+            
+            document.getElementById('detailsEditButton').onclick = () => editHardware(data);
+            document.getElementById('viewAuditButton').onclick = () => showAuditLog(data.asset_tag);
+        }
+
+        // Edit hardware function
+        function editHardware(data) {
+            if (!userPermissions.includes('edit')) {
+                alert('You do not have permission to edit items');
+                return;
+            }
+            
+            currentItem = data;
+            
+            document.getElementById('siteName').value = data.site_name || '';
+            document.getElementById('roomNumber').value = data.room_number || '';
+            document.getElementById('roomName').value = data.room_name || '';
+            document.getElementById('roomType').value = data.room_type || '';
+            document.getElementById('assetTag').value = data.asset_tag || '';
+            document.getElementById('assetType').value = data.asset_type || '';
+            document.getElementById('model').value = data.model || '';
+            document.getElementById('serialNumber').value = data.serial_number || '';
+            document.getElementById('notes').value = data.notes || '';
+            document.getElementById('assignedTo').value = data.assigned_to || '';
+            document.getElementById('dateAssigned').value = data.date_assigned || '';
+            document.getElementById('dateDecommissioned').value = data.date_decommissioned || '';
+            
+            document.getElementById('modalTitle').textContent = 'Edit Hardware';
+            document.getElementById('submitButton').textContent = 'Save Changes';
+            
+            document.getElementById('formModal').style.display = 'block';
+        }
+
+        // Show audit log function
+        async function showAuditLog(assetTag) {
+            try {
+                const response = await fetch(`/api/hardware/${assetTag}/audit`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                const tbody = document.getElementById('auditTableBody');
+                tbody.innerHTML = '';
+                
+                data.forEach(log => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${new Date(log.changed_at).toLocaleString()}</td>
+                        <td>${log.action_type}</td>
+                        <td>${log.field_name}</td>
+                        <td>${log.old_value || ''}</td>
+                        <td>${log.new_value || ''}</td>
+                        <td>${log.changed_by}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+                document.getElementById('auditModal').style.display = 'block';
+            } catch (error) {
+                console.error('Error loading audit log:', error);
+                alert('Error loading audit log');
+            }
+        }
+
         // Initialize Grid
         document.addEventListener('DOMContentLoaded', () => {
             const gridDiv = document.querySelector('#myGrid');
             new agGrid.Grid(gridDiv, gridOptions);
 
-            // Updated pagination event listeners
+            // Pagination event listeners
             document.getElementById('prevPage').addEventListener('click', () => {
                 if (currentPage > 1) {
                     loadInventory(currentPage - 1);
@@ -564,7 +641,7 @@
 
             // Apply filters
             document.getElementById('applyFilters').addEventListener('click', () => {
-                currentPage = 1; // Reset to first page when applying filters
+                currentPage = 1;
                 loadInventory(1);
             });
 
@@ -573,7 +650,7 @@
                 document.querySelectorAll('.filter-group input, .filter-group select').forEach(input => {
                     input.value = '';
                 });
-                currentPage = 1; // Reset to first page when clearing filters
+                currentPage = 1;
                 loadInventory(1);
             });
 
@@ -645,7 +722,7 @@
                     alert(isEdit ? 'Hardware updated successfully!' : 'Hardware added successfully!');
                     document.getElementById('hardwareForm').reset();
                     document.getElementById('formModal').style.display = 'none';
-                    loadInventory(1);
+                    loadInventory(currentPage);
                 } catch (error) {
                     alert('Error: ' + error.message);
                 }
@@ -655,7 +732,6 @@
             fetch('/.auth/me')
                 .then(response => response.json())
                 .then(authData => {
-                    console.log('Auth data:', authData); // Debug log
                     if (authData && authData.length > 0 && authData[0].user_claims) {
                         const nameClaim = authData[0].user_claims.find(claim => 
                             claim.typ === 'name' || 
