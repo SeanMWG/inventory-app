@@ -267,14 +267,16 @@
     </div>
 
     <script>
+        // Global state variables
         let userPermissions = [];
         let gridApi;
         let columnApi;
         let currentItem = null;
         let currentPage = 1;
         let totalPages = 1;
+        let isLoading = false;
 
-        // Column Definitions with Community Edition features
+        // Column Definitions
         const columnDefs = [
             { 
                 field: 'site_name', 
@@ -379,8 +381,8 @@
                 }
             }
         ];
-        
-        // Grid Options with Community Edition features
+
+        // Grid Options
         const gridOptions = {
             columnDefs: columnDefs,
             defaultColDef: {
@@ -435,166 +437,94 @@
             }
         }
 
-        // Search functionality with debounce
-        let searchTimeout;
-        document.getElementById('searchInput').addEventListener('input', function(e) {
-            if (searchTimeout) {
-                clearTimeout(searchTimeout);
-            }
-            
-            searchTimeout = setTimeout(() => {
-                currentPage = 1;
-                loadInventory(1);
-            }, 300);
-        });
-
-        // Get current search parameters and persist them
-        function getCurrentSearchParams() {
-            const params = {
-                search: document.getElementById('searchInput').value,
-                site_name: document.getElementById('filterSiteName')?.value || '',
-                room_number: document.getElementById('filterRoomNumber')?.value || '',
-                room_name: document.getElementById('filterRoomName')?.value || '',
-                room_type: document.getElementById('filterRoomType')?.value || '',
-                asset_tag: document.getElementById('filterAssetTag')?.value || '',
-                asset_type: document.getElementById('filterAssetType')?.value || '',
-                model: document.getElementById('filterModel')?.value || '',
-                serial_number: document.getElementById('filterSerialNumber')?.value || '',
-                assigned_to: document.getElementById('filterAssignedTo')?.value || '',
-                date_assigned_from: document.getElementById('filterDateAssignedFrom')?.value || '',
-                date_assigned_to: document.getElementById('filterDateAssignedTo')?.value || '',
-                date_decommissioned_from: document.getElementById('filterDateDecommissionedFrom')?.value || '',
-                date_decommissioned_to: document.getElementById('filterDateDecommissionedTo')?.value || ''
-            };
-
-            // Save current state to sessionStorage
-            sessionStorage.setItem('searchParams', JSON.stringify(params));
-            return params;
-        }
-
-        // Restore search parameters from sessionStorage
-        function restoreSearchParams() {
-            try {
-                const savedParams = sessionStorage.getItem('searchParams');
-                if (savedParams) {
-                    const params = JSON.parse(savedParams);
-                    document.getElementById('searchInput').value = params.search || '';
-                    document.getElementById('filterSiteName').value = params.site_name || '';
-                    document.getElementById('filterRoomNumber').value = params.room_number || '';
-                    document.getElementById('filterRoomName').value = params.room_name || '';
-                    document.getElementById('filterRoomType').value = params.room_type || '';
-                    document.getElementById('filterAssetTag').value = params.asset_tag || '';
-                    document.getElementById('filterAssetType').value = params.asset_type || '';
-                    document.getElementById('filterModel').value = params.model || '';
-                    document.getElementById('filterSerialNumber').value = params.serial_number || '';
-                    document.getElementById('filterAssignedTo').value = params.assigned_to || '';
-                    document.getElementById('filterDateAssignedFrom').value = params.date_assigned_from || '';
-                    document.getElementById('filterDateAssignedTo').value = params.date_assigned_to || '';
-                    document.getElementById('filterDateDecommissionedFrom').value = params.date_decommissioned_from || '';
-                    document.getElementById('filterDateDecommissionedTo').value = params.date_decommissioned_to || '';
-                }
-            } catch (error) {
-                console.error('Error restoring search params:', error);
-            }
-        }
-
-        // Load inventory data
+        // Load inventory data with debounce
+        let loadTimeout;
         async function loadInventory(page = 1) {
-            try {
-                // Show loading state
-                gridApi.showLoadingOverlay();
-                
-                // Store the requested page number
-                const requestedPage = parseInt(page);
-                console.log('Loading page:', requestedPage);
-                
-                // Get and persist current search parameters
-                const searchParams = getCurrentSearchParams();
-                
-                // Create URL parameters
-                const params = new URLSearchParams({
-                    page: requestedPage.toString(),
-                    ...searchParams
-                });
-
-                const response = await fetch(`/api/hardware?${params.toString()}`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                console.log('Server response:', data);
-                
-                if (!data || !Array.isArray(data.items)) {
-                    throw new Error('Invalid response format');
-                }
-                
-                // Update grid data
-                gridApi.setRowData(data.items);
-                
-                // Update pagination state with the server's response
-                currentPage = parseInt(data.page) || requestedPage;
-                totalPages = parseInt(data.total_pages) || 1;
-                
-                console.log('Updated state:', { currentPage, totalPages });
-                
-                // Update pagination controls
-                updatePaginationControls();
-                
-                // Hide loading overlay
-                gridApi.hideOverlay();
-                
-                // Return focus to the clicked button
-                if (requestedPage > currentPage) {
-                    document.getElementById('nextPage').focus();
-                } else if (requestedPage < currentPage) {
-                    document.getElementById('prevPage').focus();
-                }
-
-                
-            } catch (error) {
-                console.error('Error loading inventory:', error);
-                gridApi.hideOverlay();
-                alert('Error loading inventory: ' + error.message);
-                
-                // Reset pagination state on error
-                currentPage = 1;
-                totalPages = 1;
-                updatePaginationControls();
+            if (isLoading) return;
+            
+            if (loadTimeout) {
+                clearTimeout(loadTimeout);
             }
+
+            loadTimeout = setTimeout(async () => {
+                try {
+                    isLoading = true;
+                    gridApi.showLoadingOverlay();
+                    
+                    const requestedPage = parseInt(page);
+                    console.log('Loading page:', requestedPage);
+                    
+                    const searchParams = {
+                        page: requestedPage,
+                        search: document.getElementById('searchInput').value,
+                        site_name: document.getElementById('filterSiteName')?.value || '',
+                        room_number: document.getElementById('filterRoomNumber')?.value || '',
+                        room_name: document.getElementById('filterRoomName')?.value || '',
+                        room_type: document.getElementById('filterRoomType')?.value || '',
+                        asset_tag: document.getElementById('filterAssetTag')?.value || '',
+                        asset_type: document.getElementById('filterAssetType')?.value || '',
+                        model: document.getElementById('filterModel')?.value || '',
+                        serial_number: document.getElementById('filterSerialNumber')?.value || '',
+                        assigned_to: document.getElementById('filterAssignedTo')?.value || '',
+                        date_assigned_from: document.getElementById('filterDateAssignedFrom')?.value || '',
+                        date_assigned_to: document.getElementById('filterDateAssignedTo')?.value || '',
+                        date_decommissioned_from: document.getElementById('filterDateDecommissionedFrom')?.value || '',
+                        date_decommissioned_to: document.getElementById('filterDateDecommissionedTo')?.value || ''
+                    };
+
+                    const params = new URLSearchParams(searchParams);
+                    const response = await fetch(`/api/hardware?${params.toString()}`);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('Server response:', data);
+                    
+                    if (!data || !Array.isArray(data.items)) {
+                        throw new Error('Invalid response format');
+                    }
+                    
+                    gridApi.setRowData(data.items);
+                    currentPage = parseInt(data.page) || requestedPage;
+                    totalPages = parseInt(data.total_pages) || 1;
+                    
+                    console.log('Updated state:', { currentPage, totalPages });
+                    updatePaginationControls();
+                    
+                } catch (error) {
+                    console.error('Error loading inventory:', error);
+                    alert('Error loading inventory: ' + error.message);
+                    currentPage = 1;
+                    totalPages = 1;
+                    updatePaginationControls();
+                } finally {
+                    gridApi.hideOverlay();
+                    isLoading = false;
+                }
+            }, 300);
         }
 
-        // Updated pagination controls function
+        // Update pagination controls
         function updatePaginationControls() {
-            console.log('Updating pagination controls:', { currentPage, totalPages });
-            
             const prevButton = document.getElementById('prevPage');
             const nextButton = document.getElementById('nextPage');
             const pageInfo = document.getElementById('pageInfo');
             
-            // Update page info display
             pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
             
-            // Update Previous button state
-            const canGoPrev = currentPage > 1;
-            prevButton.disabled = !canGoPrev;
-            if (canGoPrev) {
-                prevButton.classList.remove('disabled');
-            } else {
-                prevButton.classList.add('disabled');
-            }
+            prevButton.disabled = currentPage <= 1;
+            nextButton.disabled = currentPage >= totalPages;
             
-            // Update Next button state
-            const canGoNext = currentPage < totalPages;
-            nextButton.disabled = !canGoNext;
-            if (canGoNext) {
-                nextButton.classList.remove('disabled');
-            } else {
-                nextButton.classList.add('disabled');
-            }
+            prevButton.classList.toggle('disabled', currentPage <= 1);
+            nextButton.classList.toggle('disabled', currentPage >= totalPages);
             
-            console.log('Button states:', { 
-                prevDisabled: prevButton.disabled, 
-                nextDisabled: nextButton.disabled 
+            console.log('Button states:', {
+                currentPage,
+                totalPages,
+                prevDisabled: prevButton.disabled,
+                nextDisabled: nextButton.disabled
             });
         }
 
@@ -681,46 +611,44 @@
             }
         }
 
-                // Initialize Grid
-                document.addEventListener('DOMContentLoaded', () => {
-                    const gridDiv = document.querySelector('#myGrid');
-                    new agGrid.Grid(gridDiv, gridOptions);
-
-                    // Restore search parameters and load initial page from URL
-                    restoreSearchParams();
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const initialPage = parseInt(urlParams.get('page')) || 1;
-                    loadInventory(initialPage);
+        // Initialize Grid
+        document.addEventListener('DOMContentLoaded', () => {
+            const gridDiv = document.querySelector('#myGrid');
+            new agGrid.Grid(gridDiv, gridOptions);
 
             // Pagination event listeners
-            const prevButton = document.getElementById('prevPage');
-            const nextButton = document.getElementById('nextPage');
-
-            function handlePrevClick() {
-                console.log('Previous clicked, current page:', currentPage);
-                if (!prevButton.disabled && currentPage > 1) {
-                    const newPage = currentPage - 1;
-                    console.log('Loading previous page:', newPage);
-                    loadInventory(newPage);
+            document.getElementById('prevPage').addEventListener('click', function() {
+                if (!this.disabled && currentPage > 1 && !isLoading) {
+                    loadInventory(currentPage - 1);
                 }
-            }
+            });
 
-            function handleNextClick() {
-                console.log('Next clicked, current page:', currentPage);
-                if (!nextButton.disabled && currentPage < totalPages) {
-                    const newPage = currentPage + 1;
-                    console.log('Loading next page:', newPage);
-                    loadInventory(newPage);
+            document.getElementById('nextPage').addEventListener('click', function() {
+                if (!this.disabled && currentPage < totalPages && !isLoading) {
+                    loadInventory(currentPage + 1);
                 }
-            }
+            });
 
-            // Remove any existing event listeners
-            prevButton.replaceWith(prevButton.cloneNode(true));
-            nextButton.replaceWith(nextButton.cloneNode(true));
+            // Search input handler
+            document.getElementById('searchInput').addEventListener('input', () => {
+                currentPage = 1;
+                loadInventory(1);
+            });
 
-            // Re-get the buttons after replacing them
-            document.getElementById('prevPage').addEventListener('click', handlePrevClick);
-            document.getElementById('nextPage').addEventListener('click', handleNextClick);
+            // Apply filters handler
+            document.getElementById('applyFilters').addEventListener('click', () => {
+                currentPage = 1;
+                loadInventory(1);
+            });
+
+            // Clear filters handler
+            document.getElementById('clearFilters').addEventListener('click', () => {
+                document.querySelectorAll('.filter-group input, .filter-group select').forEach(input => {
+                    input.value = '';
+                });
+                currentPage = 1;
+                loadInventory(1);
+            });
 
             // Theme toggle
             const themeToggle = document.getElementById('themeToggle');
@@ -762,21 +690,6 @@
             toggleFilters.addEventListener('click', () => {
                 filterPanel.classList.toggle('active');
                 toggleFilters.textContent = filterPanel.classList.contains('active') ? 'Hide Filters' : 'Show Filters';
-            });
-
-            // Apply filters
-            document.getElementById('applyFilters').addEventListener('click', () => {
-                currentPage = 1;
-                loadInventory(1);
-            });
-
-            // Clear filters
-            document.getElementById('clearFilters').addEventListener('click', () => {
-                document.querySelectorAll('.filter-group input, .filter-group select').forEach(input => {
-                    input.value = '';
-                });
-                currentPage = 1;
-                loadInventory(1);
             });
 
             // Modal close buttons
