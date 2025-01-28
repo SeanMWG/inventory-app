@@ -454,7 +454,10 @@
                 // Show loading state
                 gridApi.showLoadingOverlay();
                 
-                currentPage = page;
+                // Store the requested page number
+                const requestedPage = parseInt(page);
+                console.log('Loading page:', requestedPage);
+                
                 const searchTerm = document.getElementById('searchInput').value;
                 
                 const params = new URLSearchParams({
@@ -480,47 +483,79 @@
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
+                console.log('Server response:', data);
+                
+                if (!data || !Array.isArray(data.items)) {
+                    throw new Error('Invalid response format');
+                }
                 
                 // Update grid data
-                gridApi.setRowData(data.items || []);
+                gridApi.setRowData(data.items);
                 
-                // Update pagination state
-                currentPage = data.page || 1;
-                totalPages = data.total_pages || 1;
+                // Update pagination state with the server's response
+                currentPage = parseInt(data.page) || requestedPage;
+                totalPages = parseInt(data.total_pages) || 1;
+                
+                console.log('Updated state:', { currentPage, totalPages });
+                
+                // Update pagination controls
                 updatePaginationControls();
                 
                 // Hide loading overlay
                 gridApi.hideOverlay();
                 
+                // Return focus to the clicked button
+                if (requestedPage > currentPage) {
+                    document.getElementById('nextPage').focus();
+                } else if (requestedPage < currentPage) {
+                    document.getElementById('prevPage').focus();
+                }
+                
             } catch (error) {
                 console.error('Error loading inventory:', error);
+                gridApi.hideOverlay();
+                alert('Error loading inventory: ' + error.message);
+                
+                // Reset pagination state on error
+                currentPage = 1;
+                totalPages = 1;
+                updatePaginationControls();
             }
         }
 
         // Updated pagination controls function
         function updatePaginationControls() {
+            console.log('Updating pagination controls:', { currentPage, totalPages });
+            
             const prevButton = document.getElementById('prevPage');
             const nextButton = document.getElementById('nextPage');
             const pageInfo = document.getElementById('pageInfo');
             
+            // Update page info display
             pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
             
-            // Update button states
-            if (currentPage <= 1) {
-                prevButton.disabled = true;
-                prevButton.classList.add('disabled');
-            } else {
-                prevButton.disabled = false;
+            // Update Previous button state
+            const canGoPrev = currentPage > 1;
+            prevButton.disabled = !canGoPrev;
+            if (canGoPrev) {
                 prevButton.classList.remove('disabled');
+            } else {
+                prevButton.classList.add('disabled');
             }
             
-            if (currentPage >= totalPages) {
-                nextButton.disabled = true;
-                nextButton.classList.add('disabled');
-            } else {
-                nextButton.disabled = false;
+            // Update Next button state
+            const canGoNext = currentPage < totalPages;
+            nextButton.disabled = !canGoNext;
+            if (canGoNext) {
                 nextButton.classList.remove('disabled');
+            } else {
+                nextButton.classList.add('disabled');
             }
+            
+            console.log('Button states:', { 
+                prevDisabled: prevButton.disabled, 
+                nextDisabled: nextButton.disabled 
+            });
         }
 
         // Show details function
@@ -613,14 +648,20 @@
 
             // Pagination event listeners
             document.getElementById('prevPage').addEventListener('click', function() {
+                console.log('Previous clicked, current page:', currentPage);
                 if (!this.disabled && currentPage > 1) {
-                    loadInventory(currentPage - 1);
+                    const newPage = currentPage - 1;
+                    console.log('Loading previous page:', newPage);
+                    loadInventory(newPage);
                 }
             });
 
             document.getElementById('nextPage').addEventListener('click', function() {
+                console.log('Next clicked, current page:', currentPage);
                 if (!this.disabled && currentPage < totalPages) {
-                    loadInventory(currentPage + 1);
+                    const newPage = currentPage + 1;
+                    console.log('Loading next page:', newPage);
+                    loadInventory(newPage);
                 }
             });
 
