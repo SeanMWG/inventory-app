@@ -19,6 +19,23 @@ def teardown_request(exception):
 def index():
     return render_template('index.html')
 
+@app.route('/api/test-db')
+def test_db():
+    try:
+        cursor = g.db.cursor()
+        cursor.execute("SELECT TOP 1 * FROM dbo.Formatted_Company_Inventory")
+        result = cursor.fetchone()
+        return jsonify({
+            'success': True,
+            'message': 'Database connection successful',
+            'data': str(result)
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/locations', methods=['GET'])
 def get_locations():
     try:
@@ -117,7 +134,23 @@ def get_hardware():
         # Get query parameters
         room_type = request.args.get('room_type')
         
-        # Base query
+        # First get total count
+        count_query = """
+            SELECT COUNT(*)
+            FROM dbo.Formatted_Company_Inventory i
+            JOIN dbo.Locations l ON i.location_id = l.location_id
+            WHERE 1=1
+        """
+        count_params = []
+        
+        if room_type:
+            count_query += " AND l.room_type = ?"
+            count_params.append(room_type)
+            
+        cursor.execute(count_query, count_params)
+        total_items = cursor.fetchone()[0]
+        
+        # Base query for data
         query = """
             SELECT 
                 i.inventory_id,
@@ -150,12 +183,15 @@ def get_hardware():
         cursor.execute(query, params)
         
         columns = [column[0] for column in cursor.description]
-        results = []
+        items = []
         
         for row in cursor.fetchall():
-            results.append(dict(zip(columns, row)))
+            items.append(dict(zip(columns, row)))
             
-        return jsonify(results)
+        return jsonify({
+            'items': items,
+            'total_items': total_items
+        })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
