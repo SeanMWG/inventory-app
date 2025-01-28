@@ -2,8 +2,10 @@ from flask import Flask, render_template, request, jsonify, g
 import pyodbc
 from datetime import datetime
 from utils import get_db_connection, log_change
+from routes import location_routes
 
 app = Flask(__name__)
+app.register_blueprint(location_routes.bp)
 
 @app.before_request
 def before_request():
