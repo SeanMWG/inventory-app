@@ -451,6 +451,9 @@
         // Load inventory data
         async function loadInventory(page = 1) {
             try {
+                // Show loading state
+                gridApi.showLoadingOverlay();
+                
                 currentPage = page;
                 const searchTerm = document.getElementById('searchInput').value;
                 
@@ -478,11 +481,16 @@
                 }
                 const data = await response.json();
                 
-                gridApi.setRowData(data.items);
+                // Update grid data
+                gridApi.setRowData(data.items || []);
                 
-                currentPage = data.page;
-                totalPages = data.total_pages;
+                // Update pagination state
+                currentPage = data.page || 1;
+                totalPages = data.total_pages || 1;
                 updatePaginationControls();
+                
+                // Hide loading overlay
+                gridApi.hideOverlay();
                 
             } catch (error) {
                 console.error('Error loading inventory:', error);
