@@ -647,23 +647,34 @@
             new agGrid.Grid(gridDiv, gridOptions);
 
             // Pagination event listeners
-            document.getElementById('prevPage').addEventListener('click', function() {
+            const prevButton = document.getElementById('prevPage');
+            const nextButton = document.getElementById('nextPage');
+
+            function handlePrevClick() {
                 console.log('Previous clicked, current page:', currentPage);
-                if (!this.disabled && currentPage > 1) {
+                if (!prevButton.disabled && currentPage > 1) {
                     const newPage = currentPage - 1;
                     console.log('Loading previous page:', newPage);
                     loadInventory(newPage);
                 }
-            });
+            }
 
-            document.getElementById('nextPage').addEventListener('click', function() {
+            function handleNextClick() {
                 console.log('Next clicked, current page:', currentPage);
-                if (!this.disabled && currentPage < totalPages) {
+                if (!nextButton.disabled && currentPage < totalPages) {
                     const newPage = currentPage + 1;
                     console.log('Loading next page:', newPage);
                     loadInventory(newPage);
                 }
-            });
+            }
+
+            // Remove any existing event listeners
+            prevButton.replaceWith(prevButton.cloneNode(true));
+            nextButton.replaceWith(nextButton.cloneNode(true));
+
+            // Re-get the buttons after replacing them
+            document.getElementById('prevPage').addEventListener('click', handlePrevClick);
+            document.getElementById('nextPage').addEventListener('click', handleNextClick);
 
             // Theme toggle
             const themeToggle = document.getElementById('themeToggle');
