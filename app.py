@@ -133,6 +133,9 @@ def get_hardware():
         
         # Get query parameters
         room_type = request.args.get('room_type')
+        page = int(request.args.get('page', 1))
+        per_page = 25  # Fixed page size
+        offset = (page - 1) * per_page
         
         # First get total count
         count_query = """
@@ -178,7 +181,13 @@ def get_hardware():
             query += " AND l.room_type = ?"
             params.append(room_type)
             
-        query += " ORDER BY l.site_name, l.room_number, i.asset_tag"
+        # Add ORDER BY, OFFSET and FETCH NEXT
+        query += """ 
+            ORDER BY l.site_name, l.room_number, i.asset_tag
+            OFFSET ? ROWS
+            FETCH NEXT ? ROWS ONLY
+        """
+        params.extend([offset, per_page])
         
         cursor.execute(query, params)
         
@@ -190,7 +199,10 @@ def get_hardware():
             
         return jsonify({
             'items': items,
-            'total_items': total_items
+            'total_items': total_items,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total_items + per_page - 1) // per_page
         })
         
     except Exception as e:
